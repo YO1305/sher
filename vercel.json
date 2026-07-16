@@ -1,0 +1,9 @@
+{
+  "installCommand": "npm install --prefix moliya-app",
+  "buildCommand": "npm run build --prefix moliya-app",
+  "outputDirectory": "moliya-app/dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
