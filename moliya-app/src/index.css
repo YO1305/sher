@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0f1117;
+  --color-surface: #1a1d27;
+  --color-surface2: #242838;
+  --color-border: #2e3348;
+  --color-income: #22c55e;
+  --color-expense: #ef4444;
+  --color-primary: #6366f1;
+  --color-primary-light: #818cf8;
+  --color-text: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-gold: #f59e0b;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: Inter, system-ui, sans-serif;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
+/* Hide default number spinners where used */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
