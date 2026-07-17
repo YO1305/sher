@@ -7,13 +7,29 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 
+// Публичный конфиг Firebase Web (по дизайну встраивается в клиент — не секрет).
+// Значения из .env.local имеют приоритет; иначе используется этот проект (moliya-s),
+// чтобы облако работало и в проде (Vercel) без настройки переменных окружения.
+const fallbackConfig = {
+  apiKey: 'AIzaSyAjiJcrWUjT8sg_3zQS6d1dX0VWghyoOLQ',
+  authDomain: 'moliya-s.firebaseapp.com',
+  projectId: 'moliya-s',
+  storageBucket: 'moliya-s.firebasestorage.app',
+  messagingSenderId: '376723011011',
+  appId: '1:376723011011:web:36709f983797d02af37976',
+}
+
+const env = import.meta.env
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string | undefined,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID as string | undefined,
+  apiKey: (env.VITE_FIREBASE_API_KEY as string | undefined) || fallbackConfig.apiKey,
+  authDomain: (env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined) || fallbackConfig.authDomain,
+  projectId: (env.VITE_FIREBASE_PROJECT_ID as string | undefined) || fallbackConfig.projectId,
+  storageBucket:
+    (env.VITE_FIREBASE_STORAGE_BUCKET as string | undefined) || fallbackConfig.storageBucket,
+  messagingSenderId:
+    (env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined) ||
+    fallbackConfig.messagingSenderId,
+  appId: (env.VITE_FIREBASE_APP_ID as string | undefined) || fallbackConfig.appId,
 }
 
 export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId)
