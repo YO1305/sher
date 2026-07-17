@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, Upload, FileSpreadsheet, Trash2 } from 'lucide-react'
+import { Download, Upload, FileSpreadsheet, Trash2, Cloud, LogOut } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { useSettingsStore } from '../store/settingsStore'
 import { useTransactionStore } from '../store/transactionStore'
 import { useDebtStore } from '../store/debtStore'
+import { useAuthStore } from '../store/authStore'
+import { isFirebaseConfigured } from '../firebase/config'
 import { exportToJson, importFromJson } from '../utils/exportImport'
 import { parseExcelFile } from '../utils/excelImport'
 
@@ -18,6 +20,11 @@ export function Settings() {
   const debts = useDebtStore((s) => s.debts)
   const setDebts = useDebtStore((s) => s.setDebts)
   const clearDebts = useDebtStore((s) => s.clearDebts)
+  const authUser = useAuthStore((s) => s.user)
+  const syncing = useAuthStore((s) => s.syncing)
+  const authError = useAuthStore((s) => s.error)
+  const signIn = useAuthStore((s) => s.signIn)
+  const signOut = useAuthStore((s) => s.signOut)
 
   const jsonRef = useRef<HTMLInputElement>(null)
   const excelRef = useRef<HTMLInputElement>(null)
@@ -82,6 +89,38 @@ export function Settings() {
       {message && (
         <div className="rounded-xl bg-primary/15 px-4 py-3 text-sm text-primary-light">{message}</div>
       )}
+
+      <section className="space-y-3 rounded-xl bg-surface p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Cloud size={16} className="text-primary-light" />
+          {t('sync.title')}
+        </div>
+        {!isFirebaseConfigured ? (
+          <p className="text-sm text-muted">{t('sync.notConfigured')}</p>
+        ) : authUser ? (
+          <div className="space-y-3">
+            <p className="text-sm">
+              {t('sync.signedInAs')}:{' '}
+              <span className="font-semibold">{authUser.displayName || authUser.email}</span>
+            </p>
+            <p className="text-sm text-muted">
+              {syncing ? t('sync.syncing') : t('sync.active')}
+            </p>
+            <Button variant="secondary" className="w-full" onClick={() => void signOut()}>
+              <LogOut size={16} />
+              {t('sync.signOut')}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted">{t('sync.hint')}</p>
+            <Button className="w-full" onClick={() => void signIn()}>
+              {t('sync.signIn')}
+            </Button>
+            {authError && <p className="text-sm text-expense">{authError}</p>}
+          </div>
+        )}
+      </section>
 
       <section className="space-y-3 rounded-xl bg-surface p-4">
         <Input
