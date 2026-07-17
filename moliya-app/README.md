@@ -51,36 +51,22 @@ localStorage keys:
 - `users/{uid}/debts/{id}`
 - `users/{uid}/meta/settings`
 
-## Настройка Firebase (один раз)
+## Настройка Firebase
 
-1. Зайдите на [console.firebase.google.com](https://console.firebase.google.com) и создайте проект (Google Analytics можно выключить).
-2. **Authentication** → Get started → вкладка **Sign-in method** → включите **Google**.
-3. **Firestore Database** → Create database → режим **Production**, регион любой (например `europe-west1`).
-4. Во вкладке **Rules** Firestore вставьте и опубликуйте:
+Проект: **moliya-s** (номер `376723011011`).
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
+Уже сделано в коде/CLI:
+- Web app `MoliyaS` зарегистрирован
+- `.env.local` с ключами Firebase
+- Firestore `(default)` создан (регион `eur3`)
+- Security rules задеплоены (`firestore.rules`)
 
-5. Project settings (шестерёнка) → **Your apps** → добавьте **Web app** (`</>`) → скопируйте значения `firebaseConfig`.
-6. Скопируйте `.env.example` в `.env.local` и вставьте значения:
+Осталось вручную (1 минута) — без биллинга Google Sign-in включается только в консоли:
 
-```
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-```
+1. Откройте [Authentication → Sign-in method](https://console.firebase.google.com/project/moliya-s/authentication/providers)
+2. Нажмите **Get started** (если впервые)
+3. Включите провайдер **Google** → Save
 
-7. Для Vercel: добавьте те же 6 переменных в Settings → Environment Variables и сделайте redeploy. Также в Firebase: Authentication → Settings → **Authorized domains** → добавьте домен приложения на Vercel.
+Для Vercel: добавьте 6 переменных из `.env.example` / `.env.local` в Settings → Environment Variables и сделайте redeploy. В Firebase → Authentication → Settings → **Authorized domains** добавьте домен Vercel.
 
-После этого в приложении: **Настройки → Облако и синхронизация → Войти через Google**. При первом входе локальные данные автоматически загрузятся в облако; дальше всё синхронизируется само (работает и офлайн — изменения отправятся при появлении сети).
+После этого в приложении: **Настройки → Облако и синхронизация → Войти через Google**.
