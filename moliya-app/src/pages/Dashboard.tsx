@@ -10,6 +10,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { BalanceCard } from '../components/dashboard/BalanceCard'
+import { CreditCardLimitsCard } from '../components/dashboard/CreditCardLimitsCard'
 import { MonthSummary } from '../components/dashboard/MonthSummary'
 import { CategoryChart } from '../components/dashboard/CategoryChart'
 import { TransactionList } from '../components/transactions/TransactionList'
@@ -57,7 +58,10 @@ export function Dashboard() {
 
       <PendingList />
 
-      <BalanceCard />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
+        <BalanceCard />
+        <CreditCardLimitsCard />
+      </div>
 
       {alerts.length > 0 && (
         <div className="space-y-2 rounded-xl border border-expense/40 bg-expense/10 p-3">

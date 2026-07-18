@@ -10,6 +10,7 @@ import { useDebts, useDebtStats } from '../../hooks/useDebts'
 import { isLoanRelated } from '../../utils/debtSync'
 import { sumCreditsDueThisMonth } from '../../utils/creditSchedule'
 import { DebtCard } from './DebtCard'
+import { CreditCalculator, type CreditCalculatorApply } from './CreditCalculator'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
@@ -82,16 +83,32 @@ export function DebtList() {
     setError('')
   }, [open, editing])
 
-  // Auto-calc total from months × monthly for new credits
+  // Auto-fill total ≈ months × payment only when remaining empty (manual mode)
   useEffect(() => {
     if (type !== 'credit' || editing) return
+    if (remainingAmount) return
     const months = Number(monthsTotal) || 0
     const monthly = Number(monthlyPayment) || 0
     if (months > 0 && monthly > 0) {
       setTotalAmount(String(months * monthly))
       setRemainingAmount(String(months * monthly))
     }
-  }, [type, monthsTotal, monthlyPayment, editing])
+  }, [type, monthsTotal, monthlyPayment, editing, remainingAmount])
+
+  const applyCalculator = (data: CreditCalculatorApply) => {
+    setMonthsTotal(String(data.remainingMonths))
+    setMonthlyPayment(String(data.monthlyPayment))
+    setRemainingAmount(String(data.remainingPrincipal))
+    setTotalAmount(String(data.remainingPrincipal))
+    setStartDate(dayjs().format('YYYY-MM-DD'))
+    const rateNote = t('calc.appliedNote', {
+      principal: formatCurrency(data.principal),
+      paid: data.monthsPaid,
+      total: data.monthsTotal,
+      rate: data.annualRate,
+    })
+    setNote((prev) => (prev.trim() ? `${prev.trim()} · ${rateNote}` : rateNote))
+  }
 
   const sections = useMemo(
     () => [
@@ -322,6 +339,9 @@ export function DebtList() {
                 onChange={(e) => setContractNumber(e.target.value)}
                 placeholder={t('optional')}
               />
+
+              {!editing && <CreditCalculator onApply={applyCalculator} />}
+
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   label={t('monthsTotal')}
