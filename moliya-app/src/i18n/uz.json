@@ -113,6 +113,8 @@
   "counterpartyRequired": "Kontakt shaxsni kiriting",
   "debtHistory": "O'zaro hisob-kitoblar tarixi",
   "debts.autoHint": "Operatsiyalardagi qarzlar (berdim / oldim / qaytardilar) avtomatik hisoblanadi. Qaytarish operatsiyasi qoldiqni kamaytiradi.",
+  "debts.missingContact": "Diqqat: {{count}} ta qarz operatsiyasida «Kimga / Kimdan» bo'sh — ular qarzlarga tushmaydi. Operatsiyani ochib kontaktni yozing.",
+  "debts.howToLend": "Chiqim «Qarz berish» qo'shing va «Kimga / Kimdan» maydoniga ism yozing.",
   "settings.categories": "Kategoriyalar",
   "settings.categoriesHint": "Daromad va xarajat kategoriyalarini qayta nomlash, qo'shish va o'chirish",
   "settings.addCategory": "Yangi kategoriya",

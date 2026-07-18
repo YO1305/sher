@@ -78,7 +78,7 @@ export const useDebtStore = create<DebtState>()(
         set({ manualDebts: manual, debts: recompute(manual) })
       },
       markPaid: (id) => {
-        const shown = get().debts.find((d) => d.id === id)
+        const shown = recompute(get().manualDebts).find((d) => d.id === id)
         if (!shown || shown.remainingAmount <= 0) {
           if (shown && shown.source !== 'auto') {
             const manual = get().manualDebts.map((d) =>
@@ -89,7 +89,6 @@ export const useDebtStore = create<DebtState>()(
           return
         }
 
-        // Close debt by posting a balancing transaction → balances recompute automatically
         const amount = shown.remainingAmount
         const today = new Date().toISOString().slice(0, 10)
 
@@ -118,10 +117,9 @@ export const useDebtStore = create<DebtState>()(
             amount,
             date: today,
             counterparty: shown.name,
-            description: 'Qarz to\'landi / Долг погашен',
+            description: "Qarz to'landi / Долг погашен",
           })
         }
-        // rebuild happens via transaction subscribe
       },
       setDebts: (debts) => {
         const manual = debts.filter(

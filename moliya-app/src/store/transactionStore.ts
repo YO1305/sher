@@ -23,6 +23,15 @@ function withIds(tx: NewTransaction): Transaction {
   }
 }
 
+function notifyDebtsChanged() {
+  queueMicrotask(() => {
+    void import('./debtStore').then(({ useDebtStore, ensureDebtTxSync }) => {
+      ensureDebtTxSync()
+      useDebtStore.getState().rebuildFromTransactions()
+    })
+  })
+}
+
 export const useTransactionStore = create<TransactionState>()(
   persist(
     (set, get) => ({
@@ -32,6 +41,7 @@ export const useTransactionStore = create<TransactionState>()(
         set((state) => ({
           transactions: [...state.transactions, full],
         }))
+        notifyDebtsChanged()
         return full
       },
       addTransactions: (txs) => {
@@ -39,6 +49,7 @@ export const useTransactionStore = create<TransactionState>()(
         set((state) => ({
           transactions: [...state.transactions, ...created],
         }))
+        notifyDebtsChanged()
         return created
       },
       updateTransaction: (id, patch) => {
@@ -58,6 +69,7 @@ export const useTransactionStore = create<TransactionState>()(
           })
         }
         set({ transactions: list })
+        notifyDebtsChanged()
       },
       deleteTransaction: (id) => {
         const tx = get().transactions.find((t) => t.id === id)
@@ -68,10 +80,22 @@ export const useTransactionStore = create<TransactionState>()(
             (t) => t.id !== id && t.id !== linkedId,
           ),
         }))
+        notifyDebtsChanged()
       },
-      setTransactions: (txs) => set({ transactions: txs }),
-      clearTransactions: () => set({ transactions: [] }),
+      setTransactions: (txs) => {
+        set({ transactions: txs })
+        notifyDebtsChanged()
+      },
+      clearTransactions: () => {
+        set({ transactions: [] })
+        notifyDebtsChanged()
+      },
     }),
-    { name: 'moliya_transactions' },
+    {
+      name: 'moliya_transactions',
+      onRehydrateStorage: () => () => {
+        notifyDebtsChanged()
+      },
+    },
   ),
 )

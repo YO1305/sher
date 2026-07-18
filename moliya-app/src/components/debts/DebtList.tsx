@@ -3,19 +3,23 @@ import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import { Plus } from 'lucide-react'
 import { useDebtStore } from '../../store/debtStore'
+import { useTransactionStore } from '../../store/transactionStore'
 import { useUiStore } from '../../store/uiStore'
+import { useDebts, useDebtStats } from '../../hooks/useDebts'
+import { isLoanRelated } from '../../utils/debtSync'
 import { DebtCard } from './DebtCard'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import type { DebtType } from '../../types'
-import { summarizeDebts } from '../../utils/debtSync'
 import { formatCurrency } from '../../utils/formatCurrency'
 
 export function DebtList() {
   const { t } = useTranslation()
-  const debts = useDebtStore((s) => s.debts)
+  const debts = useDebts()
+  const stats = useDebtStats()
+  const transactions = useTransactionStore((s) => s.transactions)
   const rebuild = useDebtStore((s) => s.rebuildFromTransactions)
   const addDebt = useDebtStore((s) => s.addDebt)
   const updateDebt = useDebtStore((s) => s.updateDebt)
@@ -26,12 +30,20 @@ export function DebtList() {
 
   useEffect(() => {
     rebuild()
-  }, [rebuild])
+  }, [rebuild, transactions])
+
+  const loanTxs = useMemo(
+    () => transactions.filter((tx) => isLoanRelated(tx)),
+    [transactions],
+  )
+  const loanWithoutContact = useMemo(
+    () => loanTxs.filter((tx) => !tx.counterparty?.trim()).length,
+    [loanTxs],
+  )
 
   const editing = debts.find((d) => d.id === editingId)
-  const stats = useMemo(() => summarizeDebts(debts), [debts])
 
-  const [type, setType] = useState<DebtType>('owe')
+  const [type, setType] = useState<DebtType>('lend')
   const [name, setName] = useState('')
   const [totalAmount, setTotalAmount] = useState('')
   const [remainingAmount, setRemainingAmount] = useState('')
@@ -42,7 +54,7 @@ export function DebtList() {
 
   useEffect(() => {
     if (!open) return
-    setType(editing?.type ?? 'owe')
+    setType(editing?.type ?? 'lend')
     setName(editing?.name ?? '')
     setTotalAmount(editing ? String(editing.totalAmount) : '')
     setRemainingAmount(editing ? String(editing.remainingAmount) : '')
@@ -98,7 +110,8 @@ export function DebtList() {
       name: name.trim(),
       totalAmount: total,
       remainingAmount: remaining,
-      monthlyPayment: type === 'credit' && monthlyPayment ? Math.round(Number(monthlyPayment)) : undefined,
+      monthlyPayment:
+        type === 'credit' && monthlyPayment ? Math.round(Number(monthlyPayment)) : undefined,
       startDate: startDate || undefined,
       note: note.trim() || undefined,
       isPaid: remaining <= 0,
@@ -113,21 +126,27 @@ export function DebtList() {
     <div className="space-y-6">
       <div className="grid grid-cols-3 gap-2 md:gap-3">
         <div className="rounded-xl bg-amber-500/10 p-3">
-          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">{t('credits')}</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">
+            {t('credits')}
+          </p>
           <p className="mt-1 font-mono text-sm font-bold text-amber-400 md:text-base">
             {formatCurrency(stats.credit, true)}
           </p>
           <p className="text-[10px] text-muted">{stats.creditCount}</p>
         </div>
         <div className="rounded-xl bg-income/10 p-3">
-          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">{t('lend')}</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">
+            {t('lend')}
+          </p>
           <p className="mt-1 font-mono text-sm font-bold text-income md:text-base">
             {formatCurrency(stats.lend, true)}
           </p>
           <p className="text-[10px] text-muted">{stats.lendCount}</p>
         </div>
         <div className="rounded-xl bg-expense/10 p-3">
-          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">{t('owe')}</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">
+            {t('owe')}
+          </p>
           <p className="mt-1 font-mono text-sm font-bold text-expense md:text-base">
             {formatCurrency(stats.owe, true)}
           </p>
@@ -136,6 +155,12 @@ export function DebtList() {
       </div>
 
       <p className="text-xs text-muted">{t('debts.autoHint')}</p>
+
+      {loanWithoutContact > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {t('debts.missingContact', { count: loanWithoutContact })}
+        </div>
+      )}
 
       <div className="flex justify-end">
         <Button onClick={openAdd}>
@@ -159,6 +184,9 @@ export function DebtList() {
           {section.items.length === 0 ? (
             <p className="rounded-xl bg-surface px-4 py-6 text-center text-sm text-muted">
               {t('noDebts')}
+              {section.key === 'lend' && (
+                <span className="mt-1 block text-xs">{t('debts.howToLend')}</span>
+              )}
             </p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
@@ -192,9 +220,9 @@ export function DebtList() {
             value={type}
             onChange={(e) => setType(e.target.value as DebtType)}
             options={[
-              { value: 'credit', label: t('credits') },
               { value: 'lend', label: t('lend') },
               { value: 'owe', label: t('owe') },
+              { value: 'credit', label: t('credits') },
             ]}
           />
           <Input label={t('bankName')} value={name} onChange={(e) => setName(e.target.value)} />
