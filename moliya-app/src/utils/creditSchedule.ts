@@ -53,23 +53,38 @@ export function getCreditDueInfo(
   const start = credit.startDate ? dayjs(credit.startDate) : asOf
   const monthsTotal = credit.monthsTotal ?? 0
 
-  let monthsElapsed = Math.max(0, asOf.startOf('month').diff(start.startOf('month'), 'month') + 1)
+  let monthsElapsed = Math.max(
+    0,
+    asOf.startOf('month').diff(start.startOf('month'), 'month') + 1,
+  )
   if (monthsTotal > 0) monthsElapsed = Math.min(monthsElapsed, monthsTotal)
 
   const payments = getCreditPayments(credit, transactions)
   const actuallyPaid = payments.reduce((s, t) => s + t.amount, 0)
 
-  const expectedPaid =
-    monthsTotal > 0 && monthly > 0
-      ? Math.min(monthsElapsed * monthly, credit.totalAmount)
-      : Math.min(monthsElapsed * monthly, credit.totalAmount)
+  // Past months only — current month's installment is NOT overdue yet
+  const pastMonths = Math.max(0, monthsElapsed - 1)
+  const expectedThroughLastMonth =
+    monthly > 0
+      ? Math.min(pastMonths * monthly, credit.totalAmount)
+      : 0
 
-  const overdue = Math.max(0, expectedPaid - actuallyPaid)
+  const overdue = Math.max(0, expectedThroughLastMonth - actuallyPaid)
+
+  // If user already overpaid past dues, apply surplus to this month's payment
+  const paidTowardCurrent = Math.max(0, actuallyPaid - expectedThroughLastMonth)
+  const currentMonthDue = Math.max(0, monthly - paidTowardCurrent)
+
+  const expectedPaid =
+    monthly > 0
+      ? Math.min(monthsElapsed * monthly, credit.totalAmount)
+      : 0
+
   const remainingAmount = Math.max(0, credit.remainingAmount)
-  const dueThisMonth = Math.min(
-    remainingAmount,
-    monthly + overdue > 0 ? Math.min(monthly + overdue, remainingAmount) : remainingAmount,
-  )
+  const dueThisMonth =
+    remainingAmount <= 0
+      ? 0
+      : Math.min(remainingAmount, currentMonthDue + overdue)
 
   return {
     creditId: credit.id,
@@ -78,7 +93,7 @@ export function getCreditDueInfo(
     expectedPaid,
     actuallyPaid,
     overdue,
-    dueThisMonth: remainingAmount <= 0 ? 0 : dueThisMonth,
+    dueThisMonth,
     remainingAmount,
   }
 }
