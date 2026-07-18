@@ -25,7 +25,10 @@ export interface Debt {
   startDate?: string
   note?: string
   isPaid: boolean
+  /** auto = computed from transactions; manual = added in Debts UI */
+  source?: 'auto' | 'manual'
 }
+
 
 export interface CreditCard {
   id: string

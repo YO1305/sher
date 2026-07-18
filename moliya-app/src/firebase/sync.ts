@@ -124,7 +124,7 @@ export async function startSync(uid: string) {
 
   if (remoteEmpty && localHasData) {
     // Первый вход: загружаем локальные данные в облако
-    await uploadAll(uid, txStore.transactions, debtStore.debts, pickSettings(settingsStore))
+    await uploadAll(uid, txStore.transactions, debtStore.manualDebts, pickSettings(settingsStore))
   }
 
   syncedTx = new Map()
@@ -143,7 +143,7 @@ export async function startSync(uid: string) {
     uid,
     'debts',
     syncedDebts,
-    () => useDebtStore.getState().debts,
+    () => useDebtStore.getState().manualDebts,
     (items) => useDebtStore.getState().setDebts(items),
     (fn) => useDebtStore.subscribe(fn),
   )

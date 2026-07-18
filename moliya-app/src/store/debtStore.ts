@@ -1,48 +1,176 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Debt, Transaction } from '../types'
-import { applyTxToDebts } from '../utils/debtSync'
+import type { Debt } from '../types'
+import { buildDebtsFromTransactions, mergeDebts } from '../utils/debtSync'
+import { useTransactionStore } from './transactionStore'
 
 interface DebtState {
+  manualDebts: Debt[]
   debts: Debt[]
-  addDebt: (debt: Omit<Debt, 'id'>) => void
+  addDebt: (debt: Omit<Debt, 'id' | 'source'>) => void
   updateDebt: (id: string, patch: Partial<Debt>) => void
   deleteDebt: (id: string) => void
   markPaid: (id: string) => void
   setDebts: (debts: Debt[]) => void
   clearDebts: () => void
-  applyTransactionEffect: (tx: Transaction, mode: 'apply' | 'revert') => void
+  rebuildFromTransactions: () => void
+}
+
+function recompute(manualDebts: Debt[]): Debt[] {
+  const txs = useTransactionStore.getState().transactions
+  const auto = buildDebtsFromTransactions(txs)
+  return mergeDebts(
+    manualDebts.map((d) => ({ ...d, source: (d.source ?? 'manual') as 'manual' })),
+    auto,
+  )
 }
 
 export const useDebtStore = create<DebtState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
+      manualDebts: [],
       debts: [],
-      addDebt: (debt) =>
-        set((state) => ({
-          debts: [...state.debts, { ...debt, id: crypto.randomUUID() }],
-        })),
-      updateDebt: (id, patch) =>
-        set((state) => ({
-          debts: state.debts.map((d) => (d.id === id ? { ...d, ...patch } : d)),
-        })),
-      deleteDebt: (id) =>
-        set((state) => ({
-          debts: state.debts.filter((d) => d.id !== id),
-        })),
-      markPaid: (id) =>
-        set((state) => ({
-          debts: state.debts.map((d) =>
-            d.id === id ? { ...d, isPaid: true, remainingAmount: 0 } : d,
-          ),
-        })),
-      setDebts: (debts) => set({ debts }),
-      clearDebts: () => set({ debts: [] }),
-      applyTransactionEffect: (tx, mode) =>
-        set((state) => ({
-          debts: applyTxToDebts(state.debts, tx, mode),
-        })),
+      addDebt: (debt) => {
+        const manual = [
+          ...get().manualDebts,
+          { ...debt, id: crypto.randomUUID(), source: 'manual' as const },
+        ]
+        set({ manualDebts: manual, debts: recompute(manual) })
+      },
+      updateDebt: (id, patch) => {
+        const shown = get().debts.find((d) => d.id === id)
+        if (!shown) return
+
+        // Auto debts are driven by transactions — only monthlyPayment can be attached via manual
+        if (shown.source === 'auto' || id.startsWith('auto-')) {
+          if (patch.monthlyPayment == null && patch.note == null && patch.name == null) return
+          const without = get().manualDebts.filter(
+            (d) =>
+              !(d.type === shown.type && d.name.toLowerCase() === shown.name.toLowerCase()),
+          )
+          const manual = [
+            ...without,
+            {
+              ...shown,
+              ...patch,
+              // Keep live amounts from auto on next recompute via merge
+              id: crypto.randomUUID(),
+              source: 'manual' as const,
+              remainingAmount: shown.remainingAmount,
+              totalAmount: shown.totalAmount,
+              isPaid: shown.isPaid,
+            },
+          ]
+          set({ manualDebts: manual, debts: recompute(manual) })
+          return
+        }
+
+        const manual = get().manualDebts.map((d) =>
+          d.id === id ? { ...d, ...patch } : d,
+        )
+        set({ manualDebts: manual, debts: recompute(manual) })
+      },
+      deleteDebt: (id) => {
+        const shown = get().debts.find((d) => d.id === id)
+        if (!shown) return
+        if (shown.source === 'auto' || id.startsWith('auto-')) return
+        const manual = get().manualDebts.filter((d) => d.id !== id)
+        set({ manualDebts: manual, debts: recompute(manual) })
+      },
+      markPaid: (id) => {
+        const shown = get().debts.find((d) => d.id === id)
+        if (!shown || shown.remainingAmount <= 0) {
+          if (shown && shown.source !== 'auto') {
+            const manual = get().manualDebts.map((d) =>
+              d.id === id ? { ...d, isPaid: true, remainingAmount: 0 } : d,
+            )
+            set({ manualDebts: manual, debts: recompute(manual) })
+          }
+          return
+        }
+
+        // Close debt by posting a balancing transaction → balances recompute automatically
+        const amount = shown.remainingAmount
+        const today = new Date().toISOString().slice(0, 10)
+
+        if (shown.type === 'lend') {
+          useTransactionStore.getState().addTransaction({
+            type: 'income',
+            category: 'loan_return',
+            amount,
+            date: today,
+            counterparty: shown.name,
+            description: 'Qarzdorlik yopildi / Долг погашен',
+          })
+        } else if (shown.type === 'credit') {
+          useTransactionStore.getState().addTransaction({
+            type: 'expense',
+            category: 'credit_pay',
+            amount,
+            date: today,
+            counterparty: shown.name,
+            description: 'Kredit yopildi / Кредит погашен',
+          })
+        } else {
+          useTransactionStore.getState().addTransaction({
+            type: 'expense',
+            category: 'loan_pay',
+            amount,
+            date: today,
+            counterparty: shown.name,
+            description: 'Qarz to\'landi / Долг погашен',
+          })
+        }
+        // rebuild happens via transaction subscribe
+      },
+      setDebts: (debts) => {
+        const manual = debts.filter(
+          (d) => d.source !== 'auto' && !String(d.id).startsWith('auto-'),
+        )
+        set({ manualDebts: manual, debts: recompute(manual) })
+      },
+      clearDebts: () => set({ manualDebts: [], debts: [] }),
+      rebuildFromTransactions: () => {
+        set({ debts: recompute(get().manualDebts) })
+      },
     }),
-    { name: 'moliya_debts' },
+    {
+      name: 'moliya_debts',
+      partialize: (state) => ({
+        manualDebts: state.manualDebts,
+      }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<{
+          manualDebts: Debt[]
+          debts: Debt[]
+        }>
+        const manual =
+          p.manualDebts ??
+          (p.debts ?? []).filter(
+            (d) => d.source !== 'auto' && !String(d.id).startsWith('auto-'),
+          )
+        return {
+          ...current,
+          manualDebts: manual,
+          debts: manual,
+        }
+      },
+      onRehydrateStorage: () => () => {
+        queueMicrotask(() => {
+          ensureDebtTxSync()
+          useDebtStore.getState().rebuildFromTransactions()
+        })
+      },
+    },
   ),
 )
+
+let subscribed = false
+export function ensureDebtTxSync() {
+  if (subscribed) return
+  subscribed = true
+  useTransactionStore.subscribe(() => {
+    useDebtStore.getState().rebuildFromTransactions()
+  })
+  useDebtStore.getState().rebuildFromTransactions()
+}

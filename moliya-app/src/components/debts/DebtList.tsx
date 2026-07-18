@@ -10,10 +10,13 @@ import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import type { DebtType } from '../../types'
+import { summarizeDebts } from '../../utils/debtSync'
+import { formatCurrency } from '../../utils/formatCurrency'
 
 export function DebtList() {
   const { t } = useTranslation()
   const debts = useDebtStore((s) => s.debts)
+  const rebuild = useDebtStore((s) => s.rebuildFromTransactions)
   const addDebt = useDebtStore((s) => s.addDebt)
   const updateDebt = useDebtStore((s) => s.updateDebt)
   const open = useUiStore((s) => s.debtModalOpen)
@@ -21,7 +24,12 @@ export function DebtList() {
   const openAdd = useUiStore((s) => s.openAddDebt)
   const close = useUiStore((s) => s.closeDebtModal)
 
+  useEffect(() => {
+    rebuild()
+  }, [rebuild])
+
   const editing = debts.find((d) => d.id === editingId)
+  const stats = useMemo(() => summarizeDebts(debts), [debts])
 
   const [type, setType] = useState<DebtType>('owe')
   const [name, setName] = useState('')
@@ -46,11 +54,29 @@ export function DebtList() {
 
   const sections = useMemo(
     () => [
-      { key: 'credit' as const, title: t('credits'), items: debts.filter((d) => d.type === 'credit') },
-      { key: 'lend' as const, title: t('lend'), items: debts.filter((d) => d.type === 'lend') },
-      { key: 'owe' as const, title: t('owe'), items: debts.filter((d) => d.type === 'owe') },
+      {
+        key: 'credit' as const,
+        title: t('credits'),
+        total: stats.credit,
+        count: stats.creditCount,
+        items: debts.filter((d) => d.type === 'credit'),
+      },
+      {
+        key: 'lend' as const,
+        title: t('lend'),
+        total: stats.lend,
+        count: stats.lendCount,
+        items: debts.filter((d) => d.type === 'lend'),
+      },
+      {
+        key: 'owe' as const,
+        title: t('owe'),
+        total: stats.owe,
+        count: stats.oweCount,
+        items: debts.filter((d) => d.type === 'owe'),
+      },
     ],
-    [debts, t],
+    [debts, stats, t],
   )
 
   const handleSave = () => {
@@ -85,6 +111,32 @@ export function DebtList() {
 
   return (
     <div className="space-y-6">
+      <div className="grid grid-cols-3 gap-2 md:gap-3">
+        <div className="rounded-xl bg-amber-500/10 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">{t('credits')}</p>
+          <p className="mt-1 font-mono text-sm font-bold text-amber-400 md:text-base">
+            {formatCurrency(stats.credit, true)}
+          </p>
+          <p className="text-[10px] text-muted">{stats.creditCount}</p>
+        </div>
+        <div className="rounded-xl bg-income/10 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">{t('lend')}</p>
+          <p className="mt-1 font-mono text-sm font-bold text-income md:text-base">
+            {formatCurrency(stats.lend, true)}
+          </p>
+          <p className="text-[10px] text-muted">{stats.lendCount}</p>
+        </div>
+        <div className="rounded-xl bg-expense/10 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">{t('owe')}</p>
+          <p className="mt-1 font-mono text-sm font-bold text-expense md:text-base">
+            {formatCurrency(stats.owe, true)}
+          </p>
+          <p className="text-[10px] text-muted">{stats.oweCount}</p>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted">{t('debts.autoHint')}</p>
+
       <div className="flex justify-end">
         <Button onClick={openAdd}>
           <Plus size={16} />
@@ -94,9 +146,16 @@ export function DebtList() {
 
       {sections.map((section) => (
         <section key={section.key}>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-            {section.title}
-          </h2>
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+              {section.title}
+            </h2>
+            {section.total > 0 && (
+              <span className="font-mono text-sm font-semibold text-gold">
+                {formatCurrency(section.total)}
+              </span>
+            )}
+          </div>
           {section.items.length === 0 ? (
             <p className="rounded-xl bg-surface px-4 py-6 text-center text-sm text-muted">
               {t('noDebts')}

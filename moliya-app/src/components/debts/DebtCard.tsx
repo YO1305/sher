@@ -106,7 +106,7 @@ export function DebtCard({ debt }: Props) {
       )}
 
       <div className="mt-3 flex gap-2">
-        {!debt.isPaid && (
+        {!debt.isPaid && debt.remainingAmount > 0 && (
           <button
             type="button"
             onClick={() => markPaid(debt.id)}
@@ -116,22 +116,26 @@ export function DebtCard({ debt }: Props) {
             {t('markPaid')}
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => openEdit(debt.id)}
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface2 text-muted hover:text-primary-light"
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm(t('confirmDelete'))) deleteDebt(debt.id)
-          }}
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface2 text-muted hover:text-expense"
-        >
-          <Trash2 size={14} />
-        </button>
+        {debt.source !== 'auto' && (
+          <>
+            <button
+              type="button"
+              onClick={() => openEdit(debt.id)}
+              className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface2 text-muted hover:text-primary-light"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(t('confirmDelete'))) deleteDebt(debt.id)
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface2 text-muted hover:text-expense"
+            >
+              <Trash2 size={14} />
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
