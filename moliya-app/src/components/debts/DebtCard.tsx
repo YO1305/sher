@@ -64,6 +64,13 @@ export function DebtCard({ debt }: Props) {
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">{title}</h3>
               <Badge color={typeColor}>{isActive ? t('active') : t('paid')}</Badge>
+              {debt.type === 'credit' && debt.paymentType && (
+                <Badge color="#64748B">
+                  {debt.paymentType === 'annuity'
+                    ? t('calc.annuityShort')
+                    : t('calc.diffShort')}
+                </Badge>
+              )}
             </div>
             {debt.note && <p className="text-sm text-muted">{debt.note}</p>}
             {debt.type === 'credit' && debt.monthsTotal != null && (

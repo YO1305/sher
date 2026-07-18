@@ -2,37 +2,49 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Calculator } from 'lucide-react'
 import { Input } from '../ui/Input'
+import { Select } from '../ui/Select'
 import { Button } from '../ui/Button'
 import {
-  calculateAnnuityCredit,
-  type AnnuityCreditResult,
+  calculateExistingCredit,
+  type CreditPaymentType,
+  type ExistingCreditResult,
 } from '../../utils/annuityCredit'
 import { formatCurrency } from '../../utils/formatCurrency'
 
 export interface CreditCalculatorApply {
-  /** Remaining principal S_m → remainingAmount / totalAmount */
   remainingPrincipal: number
-  /** Original principal S */
   principal: number
-  /** Monthly payment A */
   monthlyPayment: number
-  /** Remaining term n − m */
   remainingMonths: number
-  /** Original term n */
   monthsTotal: number
-  /** Paid months m */
   monthsPaid: number
   annualRate: number
+  paymentType: CreditPaymentType
 }
 
 interface Props {
-  /** When set, "Apply" fills the parent credit form */
   onApply?: (data: CreditCalculatorApply) => void
   className?: string
+  /** Controlled payment type (optional) */
+  paymentType?: CreditPaymentType
+  onPaymentTypeChange?: (type: CreditPaymentType) => void
 }
 
-export function CreditCalculator({ onApply, className = '' }: Props) {
+export function CreditCalculator({
+  onApply,
+  className = '',
+  paymentType: controlledType,
+  onPaymentTypeChange,
+}: Props) {
   const { t } = useTranslation()
+  const [internalType, setInternalType] = useState<CreditPaymentType>('annuity')
+  const paymentType = controlledType ?? internalType
+
+  const setPaymentType = (next: CreditPaymentType) => {
+    setInternalType(next)
+    onPaymentTypeChange?.(next)
+  }
+
   const [principal, setPrincipal] = useState('')
   const [monthsTotal, setMonthsTotal] = useState('')
   const [monthsPaid, setMonthsPaid] = useState('')
@@ -41,15 +53,16 @@ export function CreditCalculator({ onApply, className = '' }: Props) {
 
   const outcome = useMemo(() => {
     if (!touched && !principal && !monthsTotal) return null
-    return calculateAnnuityCredit({
+    return calculateExistingCredit({
       principal: Number(principal.replace(/\s/g, '')) || 0,
       monthsTotal: Number(monthsTotal) || 0,
       monthsPaid: Number(monthsPaid) || 0,
       annualRate: Number(annualRate.replace(',', '.')) || 0,
+      paymentType,
     })
-  }, [principal, monthsTotal, monthsPaid, annualRate, touched])
+  }, [principal, monthsTotal, monthsPaid, annualRate, paymentType, touched])
 
-  const result: AnnuityCreditResult | null =
+  const result: ExistingCreditResult | null =
     outcome && outcome.ok ? outcome : null
 
   const errorKey =
@@ -72,6 +85,7 @@ export function CreditCalculator({ onApply, className = '' }: Props) {
       monthsTotal: result.monthsTotal,
       monthsPaid: result.monthsPaid,
       annualRate: result.annualRate,
+      paymentType: result.paymentType,
     })
   }
 
@@ -84,6 +98,22 @@ export function CreditCalculator({ onApply, className = '' }: Props) {
         {t('calc.title')}
       </div>
       <p className="text-[11px] text-muted">{t('calc.hint')}</p>
+
+      <Select
+        label={t('calc.paymentType')}
+        value={paymentType}
+        onChange={(e) => {
+          setTouched(true)
+          setPaymentType(e.target.value as CreditPaymentType)
+        }}
+        options={[
+          { value: 'annuity', label: t('calc.annuity') },
+          { value: 'differentiated', label: t('calc.differentiated') },
+        ]}
+      />
+      <p className="text-[10px] text-muted">
+        {paymentType === 'annuity' ? t('calc.annuityHint') : t('calc.differentiatedHint')}
+      </p>
 
       <Input
         label={t('calc.principal')}
@@ -135,7 +165,10 @@ export function CreditCalculator({ onApply, className = '' }: Props) {
       {result && (
         <div className="space-y-2 rounded-lg border border-border bg-surface/80 p-3">
           <p className="text-[10px] uppercase tracking-wide text-muted">
-            {t('calc.result')}
+            {t('calc.result')} ·{' '}
+            {result.paymentType === 'annuity'
+              ? t('calc.annuity')
+              : t('calc.differentiated')}
           </p>
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-sm text-muted">{t('calc.remainingPrincipal')}</span>
@@ -150,11 +183,25 @@ export function CreditCalculator({ onApply, className = '' }: Props) {
             </span>
           </div>
           <div className="flex items-baseline justify-between gap-2 text-sm">
-            <span className="text-muted">{t('monthlyPayment')}</span>
+            <span className="text-muted">
+              {result.paymentType === 'differentiated'
+                ? t('calc.nextPayment')
+                : t('monthlyPayment')}
+            </span>
             <span className="font-mono font-semibold text-amber-300">
               {formatCurrency(result.monthlyPayment)}
             </span>
           </div>
+          {result.paymentType === 'differentiated' &&
+            result.firstPayment != null &&
+            result.lastPayment != null && (
+              <p className="text-[10px] text-muted">
+                {t('calc.diffRange', {
+                  first: formatCurrency(result.firstPayment),
+                  last: formatCurrency(result.lastPayment),
+                })}
+              </p>
+            )}
           {onApply && (
             <Button className="mt-1 w-full" variant="secondary" onClick={handleApply}>
               {t('calc.apply')}

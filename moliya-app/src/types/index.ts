@@ -63,6 +63,10 @@ export interface Debt {
   cardId?: string
   /** Payment due date YYYY-MM-DD */
   dueDate?: string
+  /** Annuity or differentiated schedule */
+  paymentType?: 'annuity' | 'differentiated'
+  /** Annual interest rate % (for calculator / display) */
+  annualRate?: number
 }
 
 export interface CustomCategory {

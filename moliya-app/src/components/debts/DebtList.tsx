@@ -16,6 +16,7 @@ import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import type { DebtType } from '../../types'
+import type { CreditPaymentType } from '../../utils/annuityCredit'
 import { formatCurrency } from '../../utils/formatCurrency'
 
 export function DebtList() {
@@ -66,6 +67,8 @@ export function DebtList() {
   const [monthlyPayment, setMonthlyPayment] = useState('')
   const [startDate, setStartDate] = useState(dayjs().format('YYYY-MM-DD'))
   const [note, setNote] = useState('')
+  const [paymentType, setPaymentType] = useState<CreditPaymentType>('annuity')
+  const [annualRate, setAnnualRate] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -80,6 +83,8 @@ export function DebtList() {
     setMonthlyPayment(editing?.monthlyPayment != null ? String(editing.monthlyPayment) : '')
     setStartDate(editing?.startDate ?? dayjs().format('YYYY-MM-DD'))
     setNote(editing?.note ?? '')
+    setPaymentType(editing?.paymentType ?? 'annuity')
+    setAnnualRate(editing?.annualRate != null ? String(editing.annualRate) : '')
     setError('')
   }, [open, editing])
 
@@ -96,12 +101,16 @@ export function DebtList() {
   }, [type, monthsTotal, monthlyPayment, editing, remainingAmount])
 
   const applyCalculator = (data: CreditCalculatorApply) => {
+    setPaymentType(data.paymentType)
+    setAnnualRate(String(data.annualRate))
     setMonthsTotal(String(data.remainingMonths))
     setMonthlyPayment(String(data.monthlyPayment))
     setRemainingAmount(String(data.remainingPrincipal))
     setTotalAmount(String(data.remainingPrincipal))
     setStartDate(dayjs().format('YYYY-MM-DD'))
     const rateNote = t('calc.appliedNote', {
+      type:
+        data.paymentType === 'annuity' ? t('calc.annuity') : t('calc.differentiated'),
       principal: formatCurrency(data.principal),
       paid: data.monthsPaid,
       total: data.monthsTotal,
@@ -196,6 +205,11 @@ export function DebtList() {
       startDate: startDate || undefined,
       note: note.trim() || undefined,
       isPaid: remaining <= 0,
+      paymentType: type === 'credit' ? paymentType : undefined,
+      annualRate:
+        type === 'credit' && annualRate
+          ? Number(annualRate.replace(',', '.')) || undefined
+          : undefined,
     }
 
     if (editing) updateDebt(editing.id, payload)
@@ -340,7 +354,25 @@ export function DebtList() {
                 placeholder={t('optional')}
               />
 
-              {!editing && <CreditCalculator onApply={applyCalculator} />}
+              <Select
+                label={t('calc.paymentType')}
+                value={paymentType}
+                onChange={(e) =>
+                  setPaymentType(e.target.value as CreditPaymentType)
+                }
+                options={[
+                  { value: 'annuity', label: t('calc.annuity') },
+                  { value: 'differentiated', label: t('calc.differentiated') },
+                ]}
+              />
+
+              {!editing && (
+                <CreditCalculator
+                  paymentType={paymentType}
+                  onPaymentTypeChange={setPaymentType}
+                  onApply={applyCalculator}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <Input
@@ -350,7 +382,11 @@ export function DebtList() {
                   onChange={(e) => setMonthsTotal(e.target.value.replace(/[^\d]/g, ''))}
                 />
                 <Input
-                  label={t('monthlyPayment')}
+                  label={
+                    paymentType === 'differentiated'
+                      ? t('calc.nextPayment')
+                      : t('monthlyPayment')
+                  }
                   inputMode="numeric"
                   value={monthlyPayment}
                   onChange={(e) => setMonthlyPayment(e.target.value.replace(/[^\d]/g, ''))}
