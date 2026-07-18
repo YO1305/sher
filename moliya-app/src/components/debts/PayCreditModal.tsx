@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import { Button } from '../ui/Button'
@@ -7,7 +7,7 @@ import { Modal } from '../ui/Modal'
 import type { Debt } from '../../types'
 import { useTransactionStore } from '../../store/transactionStore'
 import { useSettingsStore } from '../../store/settingsStore'
-import { formatCreditLabel, getCreditDueInfo } from '../../utils/creditSchedule'
+import { formatCreditLabel, getCreditPaySuggestion } from '../../utils/creditSchedule'
 import { estimateOnTimeFee, estimateLateInterest } from '../../utils/cardDebt'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { getCashBalance } from '../../utils/cashBalance'
@@ -33,14 +33,14 @@ export function PayCreditModal({ debt, open, onClose }: Props) {
   const isCard = debt?.type === 'card'
   const card = creditCards.find((c) => c.id === debt?.cardId)
 
-  const due = useMemo(
-    () => (debt && debt.type === 'credit' ? getCreditDueInfo(debt, transactions) : null),
-    [debt, transactions],
-  )
-
-  const monthly = debt?.monthlyPayment ?? due?.dueThisMonth ?? 0
+  const monthly = debt?.monthlyPayment ?? 0
   const remaining = debt?.remainingAmount ?? 0
   const balance = getCashBalance()
+  const suggestedPay =
+    debt && debt.type === 'credit'
+      ? getCreditPaySuggestion(debt, transactions)
+      : remaining
+
 
   const pastDue =
     isCard && debt?.dueDate ? dayjs().isAfter(dayjs(debt.dueDate), 'day') : false
@@ -52,10 +52,10 @@ export function PayCreditModal({ debt, open, onClose }: Props) {
     setMode(isCard ? 'full' : 'monthly')
     const defaultAmt = isCard
       ? remaining
-      : Math.min(monthly || remaining, remaining)
+      : Math.min(suggestedPay || monthly || remaining, remaining)
     setCustomAmount(String(defaultAmt))
     setError('')
-  }, [open, debt, monthly, remaining, isCard])
+  }, [open, debt, monthly, remaining, isCard, suggestedPay])
 
   if (!debt) return null
 
@@ -65,7 +65,7 @@ export function PayCreditModal({ debt, open, onClose }: Props) {
   const resolveAmount = (): number => {
     if (mode === 'monthly') {
       if (isCard) return remaining
-      return Math.min(monthly > 0 ? monthly : remaining, remaining)
+      return Math.min(suggestedPay > 0 ? suggestedPay : monthly || remaining, remaining)
     }
     if (mode === 'full') return remaining
     return Math.round(Number(customAmount) || 0)

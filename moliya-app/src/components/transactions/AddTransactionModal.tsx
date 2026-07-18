@@ -10,7 +10,7 @@ import { useTransactionStore } from '../../store/transactionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useDebts } from '../../hooks/useDebts'
 import { resolveCategories } from '../../utils/categoryHelpers'
-import { formatCreditLabel, getCreditDueInfo } from '../../utils/creditSchedule'
+import { formatCreditLabel, getCreditPaySuggestion } from '../../utils/creditSchedule'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { getCashBalance } from '../../utils/cashBalance'
 
@@ -104,10 +104,10 @@ export function AddTransactionModal() {
       { value: '', label: `— ${t('selectCredit')} —` },
       ...activeCredits.map((c) => {
         const bank = banks.find((b) => b.id === c.bankId)?.name
-        const due = getCreditDueInfo(c, transactions)
+        const pay = getCreditPaySuggestion(c, transactions)
         return {
           value: c.id,
-          label: `${formatCreditLabel(c, bank)} · ${formatCurrency(due.dueThisMonth)}`,
+          label: `${formatCreditLabel(c, bank)} · ${formatCurrency(pay)}`,
         }
       }),
     ],
@@ -138,8 +138,8 @@ export function AddTransactionModal() {
     setDebtId('')
     if (key === 'credit_pay' && activeCredits.length === 1) {
       setCreditId(activeCredits[0].id)
-      const due = getCreditDueInfo(activeCredits[0], transactions)
-      if (!amount) setAmount(String(due.dueThisMonth || activeCredits[0].monthlyPayment || ''))
+      const pay = getCreditPaySuggestion(activeCredits[0], transactions)
+      if (!amount) setAmount(String(pay || activeCredits[0].monthlyPayment || ''))
     }
     if (key === 'savings_deposit' || key === 'savings_withdraw') {
       setPaymentMethod('cash')
@@ -148,8 +148,10 @@ export function AddTransactionModal() {
 
   useEffect(() => {
     if (category === 'credit_pay' && creditId && selectedCredit && !editing) {
-      const due = getCreditDueInfo(selectedCredit, transactions)
-      if (due.dueThisMonth > 0) setAmount(String(due.dueThisMonth))
+      const pay = getCreditPaySuggestion(selectedCredit, transactions)
+      if (pay > 0) setAmount(String(pay))
+      else if (selectedCredit.monthlyPayment)
+        setAmount(String(selectedCredit.monthlyPayment))
       setCounterparty(
         formatCreditLabel(
           selectedCredit,

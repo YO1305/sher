@@ -115,3 +115,20 @@ export function formatCreditLabel(credit: Debt, bankName?: string): string {
   ].filter(Boolean)
   return parts.join(' · ')
 }
+
+/**
+ * Suggested amount for «погашение кредита».
+ * Uses monthlyPayment + overdue from past months only (never doubles current installment).
+ */
+export function getCreditPaySuggestion(
+  credit: Debt,
+  transactions: Transaction[],
+  asOf = dayjs(),
+): number {
+  const due = getCreditDueInfo(credit, transactions, asOf)
+  const monthly = credit.monthlyPayment ?? 0
+  if (due.remainingAmount <= 0) return 0
+  const suggested = monthly + due.overdue
+  if (suggested <= 0) return Math.min(due.remainingAmount, monthly || due.remainingAmount)
+  return Math.min(due.remainingAmount, suggested)
+}

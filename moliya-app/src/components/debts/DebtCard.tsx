@@ -11,7 +11,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useUiStore } from '../../store/uiStore'
 import { getDebtHistory } from '../../utils/debtSync'
 import { getCategoryLabel } from '../../utils/categoryHelpers'
-import { formatCreditLabel, getCreditDueInfo } from '../../utils/creditSchedule'
+import { formatCreditLabel, getCreditDueInfo, getCreditPaySuggestion } from '../../utils/creditSchedule'
 import { PayCreditModal } from './PayCreditModal'
 
 interface Props {
@@ -101,7 +101,7 @@ export function DebtCard({ debt }: Props) {
                 <p className="text-amber-300">
                   {t('dueThisMonth')}:{' '}
                   <span className="font-mono font-semibold">
-                    {formatCurrency(due.dueThisMonth)}
+                    {formatCurrency(getCreditPaySuggestion(debt, transactions))}
                   </span>
                   {due.overdue > 0 && (
                     <span className="ml-1 text-xs text-expense">
