@@ -35,9 +35,11 @@ function pickSettings(s: Settings): Settings {
     initialBalance: s.initialBalance,
     currency: s.currency,
     onboardingDone: s.onboardingDone,
+    banks: s.banks ?? [],
     creditCards: s.creditCards ?? [],
     customCategories: s.customCategories ?? [],
     categoryOverrides: s.categoryOverrides ?? [],
+    savingsBalance: s.savingsBalance ?? 0,
   }
 }
 
@@ -158,12 +160,17 @@ export async function startSync(uid: string) {
       applyingRemote = true
       const merged = {
         ...remote,
+        banks:
+          remote.banks && remote.banks.length > 0
+            ? remote.banks
+            : useSettingsStore.getState().banks,
         creditCards:
           remote.creditCards && remote.creditCards.length > 0
             ? remote.creditCards
             : useSettingsStore.getState().creditCards,
         customCategories: remote.customCategories ?? useSettingsStore.getState().customCategories,
         categoryOverrides: remote.categoryOverrides ?? useSettingsStore.getState().categoryOverrides,
+        savingsBalance: remote.savingsBalance ?? useSettingsStore.getState().savingsBalance,
       }
       useSettingsStore.getState().setSettings(merged)
       applyingRemote = false

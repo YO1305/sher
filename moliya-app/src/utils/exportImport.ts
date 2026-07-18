@@ -32,9 +32,11 @@ export async function importFromJson(file: File): Promise<ExportPayload> {
   // Backfill settings fields added in later versions
   data.settings = {
     ...data.settings,
+    banks: data.settings.banks ?? [],
     creditCards: data.settings.creditCards ?? [],
     customCategories: data.settings.customCategories ?? [],
     categoryOverrides: data.settings.categoryOverrides ?? [],
+    savingsBalance: data.settings.savingsBalance ?? 0,
   }
   return data
 }

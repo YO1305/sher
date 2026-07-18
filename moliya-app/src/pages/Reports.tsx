@@ -82,9 +82,11 @@ export function Reports() {
                 initialBalance: settings.initialBalance,
                 currency: settings.currency,
                 onboardingDone: settings.onboardingDone,
+                banks: settings.banks,
                 creditCards: settings.creditCards,
                 customCategories: settings.customCategories,
                 categoryOverrides: settings.categoryOverrides,
+                savingsBalance: settings.savingsBalance,
               },
             })
           }

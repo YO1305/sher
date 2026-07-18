@@ -4,9 +4,11 @@ import dayjs from 'dayjs'
 import { Plus } from 'lucide-react'
 import { useDebtStore } from '../../store/debtStore'
 import { useTransactionStore } from '../../store/transactionStore'
+import { useSettingsStore } from '../../store/settingsStore'
 import { useUiStore } from '../../store/uiStore'
 import { useDebts, useDebtStats } from '../../hooks/useDebts'
 import { isLoanRelated } from '../../utils/debtSync'
+import { sumCreditsDueThisMonth } from '../../utils/creditSchedule'
 import { DebtCard } from './DebtCard'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -20,6 +22,7 @@ export function DebtList() {
   const debts = useDebts()
   const stats = useDebtStats()
   const transactions = useTransactionStore((s) => s.transactions)
+  const banks = useSettingsStore((s) => s.banks)
   const rebuild = useDebtStore((s) => s.rebuildFromTransactions)
   const addDebt = useDebtStore((s) => s.addDebt)
   const updateDebt = useDebtStore((s) => s.updateDebt)
@@ -41,10 +44,22 @@ export function DebtList() {
     [loanTxs],
   )
 
+  const creditsDue = useMemo(
+    () =>
+      sumCreditsDueThisMonth(
+        debts.filter((d) => d.type === 'credit'),
+        transactions,
+      ),
+    [debts, transactions],
+  )
+
   const editing = debts.find((d) => d.id === editingId)
 
   const [type, setType] = useState<DebtType>('lend')
   const [name, setName] = useState('')
+  const [bankId, setBankId] = useState('')
+  const [contractNumber, setContractNumber] = useState('')
+  const [monthsTotal, setMonthsTotal] = useState('')
   const [totalAmount, setTotalAmount] = useState('')
   const [remainingAmount, setRemainingAmount] = useState('')
   const [monthlyPayment, setMonthlyPayment] = useState('')
@@ -56,6 +71,9 @@ export function DebtList() {
     if (!open) return
     setType(editing?.type ?? 'lend')
     setName(editing?.name ?? '')
+    setBankId(editing?.bankId ?? '')
+    setContractNumber(editing?.contractNumber ?? '')
+    setMonthsTotal(editing?.monthsTotal != null ? String(editing.monthsTotal) : '')
     setTotalAmount(editing ? String(editing.totalAmount) : '')
     setRemainingAmount(editing ? String(editing.remainingAmount) : '')
     setMonthlyPayment(editing?.monthlyPayment != null ? String(editing.monthlyPayment) : '')
@@ -64,11 +82,22 @@ export function DebtList() {
     setError('')
   }, [open, editing])
 
+  // Auto-calc total from months × monthly for new credits
+  useEffect(() => {
+    if (type !== 'credit' || editing) return
+    const months = Number(monthsTotal) || 0
+    const monthly = Number(monthlyPayment) || 0
+    if (months > 0 && monthly > 0) {
+      setTotalAmount(String(months * monthly))
+      setRemainingAmount(String(months * monthly))
+    }
+  }, [type, monthsTotal, monthlyPayment, editing])
+
   const sections = useMemo(
     () => [
       {
         key: 'credit' as const,
-        title: t('credits'),
+        title: t('creditsBanksCards'),
         total: stats.credit,
         count: stats.creditCount,
         items: debts.filter((d) => d.type === 'credit'),
@@ -92,26 +121,52 @@ export function DebtList() {
   )
 
   const handleSave = () => {
-    if (!name.trim()) {
+    const bank = banks.find((b) => b.id === bankId)
+    const displayName =
+      type === 'credit'
+        ? name.trim() || bank?.name || ''
+        : name.trim()
+
+    if (!displayName) {
       setError(t('validation.name'))
       return
     }
-    const total = Math.round(Number(totalAmount) || 0)
+
+    const months = type === 'credit' ? Math.round(Number(monthsTotal) || 0) : 0
+    const monthly =
+      type === 'credit' ? Math.round(Number(monthlyPayment) || 0) : 0
+
+    let total = Math.round(Number(totalAmount) || 0)
+    if (type === 'credit' && months > 0 && monthly > 0 && !total) {
+      total = months * monthly
+    }
     if (total <= 0) {
       setError(t('validation.amount'))
       return
     }
+    if (type === 'credit' && (!monthly || monthly <= 0)) {
+      setError(t('validation.monthlyPayment'))
+      return
+    }
+    if (type === 'credit' && (!months || months <= 0)) {
+      setError(t('validation.months'))
+      return
+    }
+
     const remaining = remainingAmount
       ? Math.round(Number(remainingAmount) || 0)
       : total
 
     const payload = {
       type,
-      name: name.trim(),
+      name: displayName,
       totalAmount: total,
       remainingAmount: remaining,
-      monthlyPayment:
-        type === 'credit' && monthlyPayment ? Math.round(Number(monthlyPayment)) : undefined,
+      monthlyPayment: type === 'credit' ? monthly : undefined,
+      monthsTotal: type === 'credit' ? months : undefined,
+      bankId: type === 'credit' ? bankId || undefined : undefined,
+      contractNumber:
+        type === 'credit' ? contractNumber.trim() || undefined : undefined,
       startDate: startDate || undefined,
       note: note.trim() || undefined,
       isPaid: remaining <= 0,
@@ -124,15 +179,17 @@ export function DebtList() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-2 md:gap-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="rounded-xl bg-amber-500/10 p-3">
           <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">
-            {t('credits')}
+            {t('creditsBanksCards')}
           </p>
           <p className="mt-1 font-mono text-sm font-bold text-amber-400 md:text-base">
             {formatCurrency(stats.credit, true)}
           </p>
-          <p className="text-[10px] text-muted">{stats.creditCount}</p>
+          <p className="text-[10px] text-muted">
+            {t('dueThisMonth')}: {formatCurrency(creditsDue, true)}
+          </p>
         </div>
         <div className="rounded-xl bg-income/10 p-3">
           <p className="text-[10px] uppercase tracking-wide text-muted md:text-xs">
@@ -187,6 +244,9 @@ export function DebtList() {
               {section.key === 'lend' && (
                 <span className="mt-1 block text-xs">{t('debts.howToLend')}</span>
               )}
+              {section.key === 'credit' && (
+                <span className="mt-1 block text-xs">{t('debts.howToCredit')}</span>
+              )}
             </p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
@@ -225,7 +285,53 @@ export function DebtList() {
               { value: 'credit', label: t('credits') },
             ]}
           />
-          <Input label={t('bankName')} value={name} onChange={(e) => setName(e.target.value)} />
+
+          {type === 'credit' ? (
+            <>
+              <Select
+                label={t('settings.banks')}
+                value={bankId}
+                onChange={(e) => {
+                  setBankId(e.target.value)
+                  const b = banks.find((x) => x.id === e.target.value)
+                  if (b && !name.trim()) setName(b.name)
+                }}
+                options={[
+                  { value: '', label: `— ${t('settings.bankOptional')} —` },
+                  ...banks.map((b) => ({ value: b.id, label: b.name })),
+                ]}
+              />
+              <Input
+                label={t('creditName')}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('creditNameHint')}
+              />
+              <Input
+                label={t('contractNumber')}
+                value={contractNumber}
+                onChange={(e) => setContractNumber(e.target.value)}
+                placeholder={t('optional')}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  label={t('monthsTotal')}
+                  inputMode="numeric"
+                  value={monthsTotal}
+                  onChange={(e) => setMonthsTotal(e.target.value.replace(/[^\d]/g, ''))}
+                />
+                <Input
+                  label={t('monthlyPayment')}
+                  inputMode="numeric"
+                  value={monthlyPayment}
+                  onChange={(e) => setMonthlyPayment(e.target.value.replace(/[^\d]/g, ''))}
+                />
+              </div>
+            </>
+          ) : (
+            <Input label={t('bankName')} value={name} onChange={(e) => setName(e.target.value)} />
+          )}
+
           <Input
             label={t('totalAmount')}
             inputMode="numeric"
@@ -239,14 +345,6 @@ export function DebtList() {
             onChange={(e) => setRemainingAmount(e.target.value.replace(/[^\d]/g, ''))}
             placeholder={t('optional')}
           />
-          {type === 'credit' && (
-            <Input
-              label={t('monthlyPayment')}
-              inputMode="numeric"
-              value={monthlyPayment}
-              onChange={(e) => setMonthlyPayment(e.target.value.replace(/[^\d]/g, ''))}
-            />
-          )}
           <Input
             label={t('date')}
             type="date"

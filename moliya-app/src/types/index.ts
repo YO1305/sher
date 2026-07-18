@@ -7,12 +7,30 @@ export interface Transaction {
   counterparty?: string
   description?: string
   createdAt: string
-  /** 'cash' or credit card id */
+  /** 'cash' | 'savings' | credit card id */
   paymentMethod?: string
   /** Paired tx id for credit-card dual entry */
   linkedTxId?: string
   /** Auto-created loan_taken from credit card spend */
   isCardLoan?: boolean
+  /** Link to a specific credit debt when paying / managing it */
+  creditId?: string
+  /** Link to a personal debt (owe/lend) */
+  debtId?: string
+  /** Internal transfer: to_savings | from_savings */
+  transferKind?: 'to_savings' | 'from_savings'
+}
+
+export interface Bank {
+  id: string
+  name: string
+}
+
+export interface CreditCard {
+  id: string
+  name: string
+  bankId?: string
+  limit?: number
 }
 
 export interface Debt {
@@ -27,12 +45,10 @@ export interface Debt {
   isPaid: boolean
   /** auto = computed from transactions; manual = added in Debts UI */
   source?: 'auto' | 'manual'
-}
-
-
-export interface CreditCard {
-  id: string
-  name: string
+  /** Bank credit fields */
+  bankId?: string
+  contractNumber?: string
+  monthsTotal?: number
 }
 
 export interface CustomCategory {
@@ -54,17 +70,24 @@ export interface Settings {
   initialBalance: number
   currency: 'UZS'
   onboardingDone: boolean
+  banks: Bank[]
   creditCards: CreditCard[]
   customCategories: CustomCategory[]
   categoryOverrides: CategoryOverride[]
+  savingsBalance: number
 }
 
 export type TransactionType = Transaction['type']
 export type DebtType = Debt['type']
 
+export const DEFAULT_BANKS: Bank[] = [
+  { id: 'bank-tbc', name: 'TBC' },
+  { id: 'bank-hamkorbank', name: 'Hamkorbank' },
+]
+
 export const DEFAULT_CREDIT_CARDS: CreditCard[] = [
-  { id: 'card-tbc', name: 'TBC' },
-  { id: 'card-hamkorbank', name: 'Hamkorbank' },
+  { id: 'card-tbc', name: 'TBC', bankId: 'bank-tbc' },
+  { id: 'card-hamkorbank', name: 'Hamkorbank', bankId: 'bank-hamkorbank' },
 ]
 
 export const LOAN_CATEGORIES = {

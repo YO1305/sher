@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { CategorySettings } from '../components/settings/CategorySettings'
 import { CreditCardSettings } from '../components/settings/CreditCardSettings'
+import { BankSettings } from '../components/settings/BankSettings'
 import { useSettingsStore } from '../store/settingsStore'
 import { useTransactionStore } from '../store/transactionStore'
 import { useDebtStore } from '../store/debtStore'
@@ -12,7 +13,7 @@ import { useAuthStore } from '../store/authStore'
 import { isFirebaseConfigured } from '../firebase/config'
 import { exportToJson, importFromJson } from '../utils/exportImport'
 import { parseExcelFile } from '../utils/excelImport'
-import { DEFAULT_CREDIT_CARDS } from '../types'
+import { DEFAULT_BANKS, DEFAULT_CREDIT_CARDS } from '../types'
 
 export function Settings() {
   const { t, i18n } = useTranslation()
@@ -33,6 +34,7 @@ export function Settings() {
   const excelRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const [initialBalance, setInitialBalance] = useState(String(settings.initialBalance || ''))
+  const [savingsInput, setSavingsInput] = useState(String(settings.savingsBalance || ''))
 
   const showMsg = (msg: string) => {
     setMessage(msg)
@@ -49,9 +51,11 @@ export function Settings() {
         initialBalance: settings.initialBalance,
         currency: settings.currency,
         onboardingDone: settings.onboardingDone,
+        banks: settings.banks,
         creditCards: settings.creditCards,
         customCategories: settings.customCategories,
         categoryOverrides: settings.categoryOverrides,
+        savingsBalance: settings.savingsBalance,
       },
     })
     showMsg(t('settings.exported'))
@@ -64,11 +68,13 @@ export function Settings() {
       setDebts(data.debts)
       settings.setSettings({
         ...data.settings,
+        banks: data.settings.banks?.length ? data.settings.banks : DEFAULT_BANKS,
         creditCards: data.settings.creditCards?.length
           ? data.settings.creditCards
           : DEFAULT_CREDIT_CARDS,
         customCategories: data.settings.customCategories ?? [],
         categoryOverrides: data.settings.categoryOverrides ?? [],
+        savingsBalance: data.settings.savingsBalance ?? 0,
       })
       showMsg(t('settings.imported'))
     } catch {
@@ -179,8 +185,29 @@ export function Settings() {
             {t('save')}
           </Button>
         </div>
+
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Input
+              label={t('savings')}
+              inputMode="numeric"
+              value={savingsInput}
+              onChange={(e) => setSavingsInput(e.target.value.replace(/[^\d]/g, ''))}
+            />
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              settings.setSavingsBalance(Math.round(Number(savingsInput) || 0))
+              showMsg(t('settings.saved'))
+            }}
+          >
+            {t('save')}
+          </Button>
+        </div>
       </section>
 
+      <BankSettings />
       <CreditCardSettings />
       <CategorySettings />
 

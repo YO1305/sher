@@ -60,6 +60,13 @@ export const INCOME_CATEGORIES: CategoryDef[] = [
     aliases: ['Карз кайтаришлари', 'Қарз қайтаришлари', 'Возврат долга'],
   },
   {
+    key: 'savings_withdraw',
+    type: 'income',
+    icon: Wallet,
+    color: '#14B8A6',
+    aliases: ['Накопления снять', 'Jamgarmadan', 'С накоплений'],
+  },
+  {
     key: 'other_income',
     type: 'income',
     icon: CircleDollarSign,
@@ -180,6 +187,13 @@ export const EXPENSE_CATEGORIES: CategoryDef[] = [
     icon: Heart,
     color: '#F43F5E',
     aliases: ['Эхсон', 'Эҳсон', 'Пожертвование'],
+  },
+  {
+    key: 'savings_deposit',
+    type: 'expense',
+    icon: Wallet,
+    color: '#14B8A6',
+    aliases: ['Накопления', 'Jamgarma', 'Отложить'],
   },
 ]
 

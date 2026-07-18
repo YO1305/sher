@@ -7,10 +7,11 @@ import { useTransactionStore } from './transactionStore'
 interface DebtState {
   manualDebts: Debt[]
   debts: Debt[]
-  addDebt: (debt: Omit<Debt, 'id' | 'source'>) => void
+  addDebt: (debt: Omit<Debt, 'id' | 'source'>) => string
   updateDebt: (id: string, patch: Partial<Debt>) => void
   deleteDebt: (id: string) => void
   markPaid: (id: string) => void
+  applyCreditPayment: (creditId: string, amount: number, mode: 'apply' | 'revert') => void
   setDebts: (debts: Debt[]) => void
   clearDebts: () => void
   rebuildFromTransactions: () => void
@@ -31,34 +32,48 @@ export const useDebtStore = create<DebtState>()(
       manualDebts: [],
       debts: [],
       addDebt: (debt) => {
+        const id = crypto.randomUUID()
         const manual = [
           ...get().manualDebts,
-          { ...debt, id: crypto.randomUUID(), source: 'manual' as const },
+          { ...debt, id, source: 'manual' as const },
         ]
+        set({ manualDebts: manual, debts: recompute(manual) })
+        return id
+      },
+      applyCreditPayment: (creditId, amount, mode) => {
+        const delta = mode === 'apply' ? -amount : amount
+        const manual = get().manualDebts.map((d) => {
+          if (d.id !== creditId) return d
+          const remainingAmount = Math.max(0, d.remainingAmount + delta)
+          return {
+            ...d,
+            remainingAmount,
+            isPaid: remainingAmount <= 0,
+          }
+        })
         set({ manualDebts: manual, debts: recompute(manual) })
       },
       updateDebt: (id, patch) => {
-        const shown = get().debts.find((d) => d.id === id)
+        const shown = recompute(get().manualDebts).find((d) => d.id === id)
+          ?? get().debts.find((d) => d.id === id)
         if (!shown) return
 
-        // Auto debts are driven by transactions — only monthlyPayment can be attached via manual
         if (shown.source === 'auto' || id.startsWith('auto-')) {
-          if (patch.monthlyPayment == null && patch.note == null && patch.name == null) return
           const without = get().manualDebts.filter(
             (d) =>
-              !(d.type === shown.type && d.name.toLowerCase() === shown.name.toLowerCase()),
+              !(
+                d.type === shown.type &&
+                d.name.toLowerCase() === shown.name.toLowerCase() &&
+                (d.contractNumber ?? '') === (shown.contractNumber ?? '')
+              ),
           )
           const manual = [
             ...without,
             {
               ...shown,
               ...patch,
-              // Keep live amounts from auto on next recompute via merge
               id: crypto.randomUUID(),
               source: 'manual' as const,
-              remainingAmount: shown.remainingAmount,
-              totalAmount: shown.totalAmount,
-              isPaid: shown.isPaid,
             },
           ]
           set({ manualDebts: manual, debts: recompute(manual) })
@@ -108,6 +123,7 @@ export const useDebtStore = create<DebtState>()(
             amount,
             date: today,
             counterparty: shown.name,
+            creditId: shown.id,
             description: 'Kredit yopildi / Кредит погашен',
           })
         } else {

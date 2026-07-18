@@ -1,7 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { CategoryOverride, CustomCategory, Settings } from '../types'
-import { DEFAULT_CREDIT_CARDS } from '../types'
+import type {
+  Bank,
+  CategoryOverride,
+  CreditCard,
+  CustomCategory,
+  Settings,
+} from '../types'
+import { DEFAULT_BANKS, DEFAULT_CREDIT_CARDS } from '../types'
 import i18n from '../i18n'
 
 interface SettingsState extends Settings {
@@ -11,9 +17,18 @@ interface SettingsState extends Settings {
   setOnboardingDone: (done: boolean) => void
   setSettings: (settings: Partial<Settings>) => void
   resetSettings: () => void
+  setSavingsBalance: (amount: number) => void
+  adjustSavings: (delta: number) => void
+  // Banks
+  addBank: (name: string) => string
+  updateBank: (id: string, name: string) => void
+  deleteBank: (id: string) => void
   // Credit cards
-  addCreditCard: (name: string) => void
-  updateCreditCard: (id: string, name: string) => void
+  addCreditCard: (data: { name: string; bankId?: string; limit?: number }) => void
+  updateCreditCard: (
+    id: string,
+    patch: Partial<Pick<CreditCard, 'name' | 'bankId' | 'limit'>>,
+  ) => void
   deleteCreditCard: (id: string) => void
   // Categories
   addCustomCategory: (cat: Omit<CustomCategory, 'key'> & { key?: string }) => void
@@ -30,9 +45,11 @@ const defaults: Settings = {
   initialBalance: 0,
   currency: 'UZS',
   onboardingDone: false,
+  banks: DEFAULT_BANKS,
   creditCards: DEFAULT_CREDIT_CARDS,
   customCategories: [],
   categoryOverrides: [],
+  savingsBalance: 0,
 }
 
 function upsertOverride(
@@ -43,6 +60,17 @@ function upsertOverride(
   const idx = overrides.findIndex((o) => o.key === key)
   if (idx === -1) return [...overrides, { key, ...patch }]
   return overrides.map((o, i) => (i === idx ? { ...o, ...patch } : o))
+}
+
+function migrateCards(cards: CreditCard[] | undefined, banks: Bank[]): CreditCard[] {
+  if (!cards || cards.length === 0) return DEFAULT_CREDIT_CARDS
+  return cards.map((c) => {
+    if (c.bankId) return c
+    const match = banks.find(
+      (b) => b.name.toLowerCase() === c.name.toLowerCase() || b.id === `bank-${c.id.replace('card-', '')}`,
+    )
+    return { ...c, bankId: match?.id }
+  })
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -64,17 +92,57 @@ export const useSettingsStore = create<SettingsState>()(
         void i18n.changeLanguage(defaults.language)
         set({ ...defaults })
       },
-      addCreditCard: (name) =>
+      setSavingsBalance: (savingsBalance) => set({ savingsBalance: Math.max(0, Math.round(savingsBalance)) }),
+      adjustSavings: (delta) =>
+        set((state) => ({
+          savingsBalance: Math.max(0, Math.round(state.savingsBalance + delta)),
+        })),
+      addBank: (name) => {
+        const id = crypto.randomUUID()
+        set((state) => ({
+          banks: [...state.banks, { id, name: name.trim() }],
+        }))
+        return id
+      },
+      updateBank: (id, name) =>
+        set((state) => ({
+          banks: state.banks.map((b) => (b.id === id ? { ...b, name: name.trim() } : b)),
+        })),
+      deleteBank: (id) =>
+        set((state) => ({
+          banks: state.banks.filter((b) => b.id !== id),
+          creditCards: state.creditCards.map((c) =>
+            c.bankId === id ? { ...c, bankId: undefined } : c,
+          ),
+        })),
+      addCreditCard: ({ name, bankId, limit }) =>
         set((state) => ({
           creditCards: [
             ...state.creditCards,
-            { id: crypto.randomUUID(), name: name.trim() },
+            {
+              id: crypto.randomUUID(),
+              name: name.trim(),
+              bankId,
+              limit: limit && limit > 0 ? Math.round(limit) : undefined,
+            },
           ],
         })),
-      updateCreditCard: (id, name) =>
+      updateCreditCard: (id, patch) =>
         set((state) => ({
           creditCards: state.creditCards.map((c) =>
-            c.id === id ? { ...c, name: name.trim() } : c,
+            c.id === id
+              ? {
+                  ...c,
+                  ...patch,
+                  name: patch.name?.trim() ?? c.name,
+                  limit:
+                    patch.limit !== undefined
+                      ? patch.limit > 0
+                        ? Math.round(patch.limit)
+                        : undefined
+                      : c.limit,
+                }
+              : c,
           ),
         })),
       deleteCreditCard: (id) =>
@@ -83,9 +151,7 @@ export const useSettingsStore = create<SettingsState>()(
         })),
       addCustomCategory: (cat) =>
         set((state) => {
-          const key =
-            cat.key ??
-            `custom_${cat.type}_${Date.now().toString(36)}`
+          const key = cat.key ?? `custom_${cat.type}_${Date.now().toString(36)}`
           return {
             customCategories: [
               ...state.customCategories,
@@ -131,24 +197,29 @@ export const useSettingsStore = create<SettingsState>()(
       name: 'moliya_settings',
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<Settings>
+        const banks =
+          p.banks && p.banks.length > 0 ? p.banks : DEFAULT_BANKS
         return {
           ...current,
           ...p,
-          creditCards:
-            p.creditCards && p.creditCards.length > 0
-              ? p.creditCards
-              : DEFAULT_CREDIT_CARDS,
+          banks,
+          creditCards: migrateCards(p.creditCards, banks),
           customCategories: p.customCategories ?? [],
           categoryOverrides: p.categoryOverrides ?? [],
+          savingsBalance: p.savingsBalance ?? 0,
         }
       },
       onRehydrateStorage: () => (state) => {
         if (state?.language) void i18n.changeLanguage(state.language)
+        if (state && (!state.banks || state.banks.length === 0)) {
+          state.banks = DEFAULT_BANKS
+        }
         if (state && (!state.creditCards || state.creditCards.length === 0)) {
           state.creditCards = DEFAULT_CREDIT_CARDS
         }
         if (state && !state.customCategories) state.customCategories = []
         if (state && !state.categoryOverrides) state.categoryOverrides = []
+        if (state && state.savingsBalance == null) state.savingsBalance = 0
       },
     },
   ),

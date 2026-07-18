@@ -8,12 +8,18 @@ export function namesMatch(a: string, b: string) {
   return norm(a) === norm(b)
 }
 
-function debtKey(type: DebtType, name: string) {
+function debtKey(type: DebtType, name: string, contractNumber?: string) {
+  if (type === 'credit' && contractNumber) {
+    return `${type}:${norm(name)}:${norm(contractNumber)}`
+  }
   return `${type}:${norm(name)}`
 }
 
-function autoId(type: DebtType, name: string) {
-  return `auto-${type}-${norm(name).replace(/\s+/g, '-')}`
+function autoId(type: DebtType, name: string, contractNumber?: string) {
+  const base = contractNumber
+    ? `${type}-${norm(name)}-${norm(contractNumber)}`
+    : `${type}-${norm(name)}`
+  return `auto-${base.replace(/\s+/g, '-')}`
 }
 
 function safeAmount(n: unknown): number {
@@ -193,24 +199,42 @@ export function buildDebtsFromTransactions(transactions: Transaction[]): Debt[] 
   }
 }
 
-/** Auto (from ops) is source of truth; manual only if no matching auto. */
+/** Auto (from ops) is source of truth for personal debts.
+ *  Manual credits with contract number stay separate from card auto-debts.
+ */
 export function mergeDebts(manual: Debt[], auto: Debt[]): Debt[] {
   const result: Debt[] = []
   const usedManual = new Set<string>()
 
   for (const a of auto) {
-    const key = debtKey(a.type, a.name)
-    const m = (manual ?? []).find((x) => debtKey(x.type, x.name) === key)
+    const key = debtKey(a.type, a.name, a.contractNumber)
+    const m = (manual ?? []).find(
+      (x) => debtKey(x.type, x.name, x.contractNumber) === key,
+    )
     if (m) usedManual.add(key)
-    result.push({
-      ...a,
-      monthlyPayment: m?.monthlyPayment ?? a.monthlyPayment,
-      note: a.note || m?.note,
-    })
+    // Prefer structured manual credit over thin auto aggregate
+    if (m && m.type === 'credit' && (m.contractNumber || m.monthsTotal)) {
+      result.push({
+        ...m,
+        source: 'manual',
+        remainingAmount: m.remainingAmount,
+        totalAmount: Math.max(m.totalAmount, a.totalAmount),
+        isPaid: m.remainingAmount <= 0,
+      })
+    } else {
+      result.push({
+        ...a,
+        monthlyPayment: m?.monthlyPayment ?? a.monthlyPayment,
+        note: a.note || m?.note,
+        bankId: m?.bankId ?? a.bankId,
+        contractNumber: m?.contractNumber ?? a.contractNumber,
+        monthsTotal: m?.monthsTotal ?? a.monthsTotal,
+      })
+    }
   }
 
   for (const m of manual ?? []) {
-    const key = debtKey(m.type, m.name)
+    const key = debtKey(m.type, m.name, m.contractNumber)
     if (usedManual.has(key)) continue
     result.push({ ...m, source: m.source ?? 'manual' })
   }
@@ -221,14 +245,17 @@ export function mergeDebts(manual: Debt[], auto: Debt[]): Debt[] {
 export function getDebtHistory(
   transactions: Transaction[],
   debtName: string,
+  debtId?: string,
 ): Transaction[] {
   return (transactions ?? [])
-    .filter(
-      (tx) =>
-        tx.counterparty &&
+    .filter((tx) => {
+      if (debtId && (tx.creditId === debtId || tx.debtId === debtId)) return true
+      return (
+        !!tx.counterparty &&
         namesMatch(tx.counterparty, debtName) &&
-        isLoanRelated(tx),
-    )
+        isLoanRelated(tx)
+      )
+    })
     .sort(
       (a, b) =>
         (b.date ?? '').localeCompare(a.date ?? '') ||

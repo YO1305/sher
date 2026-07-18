@@ -8,7 +8,10 @@ import { Modal } from '../ui/Modal'
 import { useUiStore } from '../../store/uiStore'
 import { useTransactionStore } from '../../store/transactionStore'
 import { useSettingsStore } from '../../store/settingsStore'
+import { useDebts } from '../../hooks/useDebts'
 import { resolveCategories } from '../../utils/categoryHelpers'
+import { formatCreditLabel, getCreditDueInfo } from '../../utils/creditSchedule'
+import { formatCurrency } from '../../utils/formatCurrency'
 
 export function AddTransactionModal() {
   const { t } = useTranslation()
@@ -19,8 +22,11 @@ export function AddTransactionModal() {
   const addTransactions = useTransactionStore((s) => s.addTransactions)
   const updateTransaction = useTransactionStore((s) => s.updateTransaction)
   const creditCards = useSettingsStore((s) => s.creditCards)
+  const banks = useSettingsStore((s) => s.banks)
   const customCategories = useSettingsStore((s) => s.customCategories)
   const categoryOverrides = useSettingsStore((s) => s.categoryOverrides)
+  const debts = useDebts()
+  const transactions = useTransactionStore((s) => s.transactions)
 
   const [type, setType] = useState<'income' | 'expense'>('expense')
   const [amount, setAmount] = useState('')
@@ -29,11 +35,27 @@ export function AddTransactionModal() {
   const [counterparty, setCounterparty] = useState('')
   const [description, setDescription] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [creditId, setCreditId] = useState('')
+  const [debtId, setDebtId] = useState('')
   const [errors, setErrors] = useState<{
     amount?: string
     category?: string
     counterparty?: string
+    creditId?: string
   }>({})
+
+  const activeCredits = useMemo(
+    () => debts.filter((d) => d.type === 'credit' && !d.isPaid && d.remainingAmount > 0),
+    [debts],
+  )
+  const activeLend = useMemo(
+    () => debts.filter((d) => d.type === 'lend' && !d.isPaid && d.remainingAmount > 0),
+    [debts],
+  )
+  const activeOwe = useMemo(
+    () => debts.filter((d) => d.type === 'owe' && !d.isPaid && d.remainingAmount > 0),
+    [debts],
+  )
 
   useEffect(() => {
     if (!open) return
@@ -44,6 +66,8 @@ export function AddTransactionModal() {
     setCounterparty(editing?.counterparty ?? '')
     setDescription(editing?.description ?? '')
     setPaymentMethod(editing?.paymentMethod ?? 'cash')
+    setCreditId(editing?.creditId ?? '')
+    setDebtId(editing?.debtId ?? '')
     setErrors({})
   }, [open, editing])
 
@@ -64,14 +88,63 @@ export function AddTransactionModal() {
     [creditCards, t],
   )
 
-  const isCardPayment = type === 'expense' && paymentMethod !== 'cash'
+  const creditOptions = useMemo(
+    () => [
+      { value: '', label: `— ${t('selectCredit')} —` },
+      ...activeCredits.map((c) => {
+        const bank = banks.find((b) => b.id === c.bankId)?.name
+        const due = getCreditDueInfo(c, transactions)
+        return {
+          value: c.id,
+          label: `${formatCreditLabel(c, bank)} · ${formatCurrency(due.dueThisMonth)}`,
+        }
+      }),
+    ],
+    [activeCredits, banks, transactions, t],
+  )
+
+  const isCardPayment =
+    type === 'expense' &&
+    paymentMethod !== 'cash' &&
+    category !== 'credit_pay' &&
+    category !== 'savings_deposit'
   const selectedCard = creditCards.find((c) => c.id === paymentMethod)
+  const selectedCredit = activeCredits.find((c) => c.id === creditId)
 
   const handleTypeChange = (next: 'income' | 'expense') => {
     setType(next)
     setCategory('')
+    setCreditId('')
+    setDebtId('')
     if (next === 'income') setPaymentMethod('cash')
   }
+
+  const handleCategoryChange = (key: string) => {
+    setCategory(key)
+    setCreditId('')
+    setDebtId('')
+    if (key === 'credit_pay' && activeCredits.length === 1) {
+      setCreditId(activeCredits[0].id)
+      const due = getCreditDueInfo(activeCredits[0], transactions)
+      if (!amount) setAmount(String(due.dueThisMonth || activeCredits[0].monthlyPayment || ''))
+    }
+    if (key === 'savings_deposit' || key === 'savings_withdraw') {
+      setPaymentMethod('cash')
+    }
+  }
+
+  useEffect(() => {
+    if (category === 'credit_pay' && creditId && selectedCredit && !editing) {
+      const due = getCreditDueInfo(selectedCredit, transactions)
+      if (due.dueThisMonth > 0) setAmount(String(due.dueThisMonth))
+      setCounterparty(
+        formatCreditLabel(
+          selectedCredit,
+          banks.find((b) => b.id === selectedCredit.bankId)?.name,
+        ),
+      )
+    }
+  }, [creditId, category]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = () => {
     const nextErrors: typeof errors = {}
@@ -79,10 +152,15 @@ export function AddTransactionModal() {
     if (!amount || !Number.isFinite(num) || num <= 0) nextErrors.amount = t('validation.amount')
     if (!category) nextErrors.category = t('validation.category')
 
-    const loanCats = ['loan_taken', 'loan_return', 'loan_given', 'loan_pay', 'credit_pay']
+    if (category === 'credit_pay' && !creditId) {
+      nextErrors.creditId = t('validation.credit')
+    }
+
+    const loanCats = ['loan_taken', 'loan_return', 'loan_given', 'loan_pay']
     const needsCounterparty =
       loanCats.includes(category) &&
-      !(type === 'expense' && paymentMethod !== 'cash')
+      !debtId &&
+      !(type === 'expense' && paymentMethod !== 'cash' && isCardPayment)
     if (needsCounterparty && !counterparty.trim()) {
       nextErrors.counterparty = t('counterpartyRequired')
     }
@@ -92,23 +170,47 @@ export function AddTransactionModal() {
 
     const rounded = Math.round(num)
 
+    // Resolve counterparty from selected personal debt
+    let cp = counterparty.trim() || undefined
+    let linkedDebtId = debtId || undefined
+    if (debtId) {
+      const d = debts.find((x) => x.id === debtId)
+      if (d) {
+        cp = d.name
+        linkedDebtId = d.id
+      }
+    }
+    if (category === 'credit_pay' && selectedCredit) {
+      cp = formatCreditLabel(
+        selectedCredit,
+        banks.find((b) => b.id === selectedCredit.bankId)?.name,
+      )
+    }
+
+    const transferKind =
+      category === 'savings_deposit'
+        ? ('to_savings' as const)
+        : category === 'savings_withdraw'
+          ? ('from_savings' as const)
+          : undefined
+
     if (editing) {
-      // Editing card dual-entry: keep payment method; linked pair synced in store
       updateTransaction(editing.id, {
         type,
         amount: rounded,
         category,
         date,
-        counterparty: counterparty.trim() || undefined,
+        counterparty: cp,
         description: description.trim() || undefined,
         paymentMethod: type === 'expense' ? paymentMethod : 'cash',
+        creditId: category === 'credit_pay' ? creditId || undefined : undefined,
+        debtId: linkedDebtId,
+        transferKind,
       })
       close()
       return
     }
 
-    // New expense paid with credit card → dual entry:
-    // 1) income loan_taken from bank  2) expense for purpose
     if (isCardPayment && selectedCard) {
       const loanId = crypto.randomUUID()
       const expenseId = crypto.randomUUID()
@@ -136,7 +238,7 @@ export function AddTransactionModal() {
           category,
           amount: rounded,
           date,
-          counterparty: counterparty.trim() || selectedCard.name,
+          counterparty: cp || selectedCard.name,
           description: description.trim() || undefined,
           paymentMethod: selectedCard.id,
           linkedTxId: loanId,
@@ -151,12 +253,36 @@ export function AddTransactionModal() {
       amount: rounded,
       category,
       date,
-      counterparty: counterparty.trim() || undefined,
+      counterparty: cp,
       description: description.trim() || undefined,
       paymentMethod: type === 'expense' ? paymentMethod : 'cash',
+      creditId: category === 'credit_pay' ? creditId || undefined : undefined,
+      debtId: linkedDebtId,
+      transferKind,
     })
     close()
   }
+
+  const showDebtPicker =
+    (category === 'loan_return' && activeLend.length > 0) ||
+    (category === 'loan_pay' && activeOwe.length > 0)
+
+  const debtPickerOptions =
+    category === 'loan_return'
+      ? [
+          { value: '', label: `— ${t('selectDebt')} —` },
+          ...activeLend.map((d) => ({
+            value: d.id,
+            label: `${d.name} · ${formatCurrency(d.remainingAmount)}`,
+          })),
+        ]
+      : [
+          { value: '', label: `— ${t('selectDebt')} —` },
+          ...activeOwe.map((d) => ({
+            value: d.id,
+            label: `${d.name} · ${formatCurrency(d.remainingAmount)}`,
+          })),
+        ]
 
   return (
     <Modal
@@ -219,19 +345,47 @@ export function AddTransactionModal() {
         <Select
           label={t('category')}
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => handleCategoryChange(e.target.value)}
           options={categoryOptions}
           error={errors.category}
         />
 
-        {type === 'expense' && (
+        {category === 'credit_pay' && (
           <Select
-            label={t('paymentMethod')}
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-            options={paymentOptions}
+            label={t('selectCredit')}
+            value={creditId}
+            onChange={(e) => setCreditId(e.target.value)}
+            options={creditOptions}
+            error={errors.creditId}
           />
         )}
+
+        {showDebtPicker && (
+          <Select
+            label={t('selectDebt')}
+            value={debtId}
+            onChange={(e) => {
+              setDebtId(e.target.value)
+              const d = debts.find((x) => x.id === e.target.value)
+              if (d) {
+                setCounterparty(d.name)
+                if (!amount) setAmount(String(d.remainingAmount))
+              }
+            }}
+            options={debtPickerOptions}
+          />
+        )}
+
+        {type === 'expense' &&
+          category !== 'credit_pay' &&
+          category !== 'savings_deposit' && (
+            <Select
+              label={t('paymentMethod')}
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              options={paymentOptions}
+            />
+          )}
 
         {isCardPayment && selectedCard && !editing && (
           <p className="rounded-lg bg-gold/10 px-3 py-2 text-xs text-gold">
@@ -246,17 +400,19 @@ export function AddTransactionModal() {
           onChange={(e) => setDate(e.target.value)}
         />
 
-        <Input
-          label={t('counterparty')}
-          value={counterparty}
-          onChange={(e) => setCounterparty(e.target.value)}
-          placeholder={
-            ['loan_taken', 'loan_return', 'loan_given', 'loan_pay', 'credit_pay'].includes(category)
-              ? t('counterpartyRequired')
-              : t('optional')
-          }
-          error={errors.counterparty}
-        />
+        {category !== 'credit_pay' && (
+          <Input
+            label={t('counterparty')}
+            value={counterparty}
+            onChange={(e) => setCounterparty(e.target.value)}
+            placeholder={
+              ['loan_taken', 'loan_return', 'loan_given', 'loan_pay'].includes(category)
+                ? t('counterpartyRequired')
+                : t('optional')
+            }
+            error={errors.counterparty}
+          />
+        )}
 
         <Input
           label={t('description')}

@@ -3,30 +3,52 @@ import { useTranslation } from 'react-i18next'
 import { CreditCard, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
+import { Select } from '../ui/Select'
 import { useSettingsStore } from '../../store/settingsStore'
 
 export function CreditCardSettings() {
   const { t } = useTranslation()
+  const banks = useSettingsStore((s) => s.banks)
   const creditCards = useSettingsStore((s) => s.creditCards)
   const addCreditCard = useSettingsStore((s) => s.addCreditCard)
   const updateCreditCard = useSettingsStore((s) => s.updateCreditCard)
   const deleteCreditCard = useSettingsStore((s) => s.deleteCreditCard)
 
   const [newName, setNewName] = useState('')
+  const [newBankId, setNewBankId] = useState('')
+  const [newLimit, setNewLimit] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const [editBankId, setEditBankId] = useState('')
+  const [editLimit, setEditLimit] = useState('')
+
+  const bankOptions = [
+    { value: '', label: `— ${t('settings.bankOptional')} —` },
+    ...banks.map((b) => ({ value: b.id, label: b.name })),
+  ]
+
+  const bankName = (id?: string) => banks.find((b) => b.id === id)?.name
 
   const handleAdd = () => {
     if (!newName.trim()) return
-    addCreditCard(newName)
+    addCreditCard({
+      name: newName,
+      bankId: newBankId || undefined,
+      limit: newLimit ? Number(newLimit) : undefined,
+    })
     setNewName('')
+    setNewBankId('')
+    setNewLimit('')
   }
 
   const saveEdit = () => {
     if (!editingId || !editName.trim()) return
-    updateCreditCard(editingId, editName)
+    updateCreditCard(editingId, {
+      name: editName,
+      bankId: editBankId || undefined,
+      limit: editLimit ? Number(editLimit) : undefined,
+    })
     setEditingId(null)
-    setEditName('')
   }
 
   return (
@@ -39,34 +61,47 @@ export function CreditCardSettings() {
 
       <div className="space-y-2">
         {creditCards.map((card) => (
-          <div
-            key={card.id}
-            className="flex items-center gap-2 rounded-lg bg-surface2 px-3 py-2"
-          >
+          <div key={card.id} className="rounded-lg bg-surface2 px-3 py-2">
             {editingId === card.id ? (
-              <input
-                className="min-h-[36px] flex-1 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus:border-primary"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && saveEdit()}
-                autoFocus
-              />
+              <div className="space-y-2">
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder={t('settings.cardName')}
+                />
+                <Select
+                  value={editBankId}
+                  onChange={(e) => setEditBankId(e.target.value)}
+                  options={bankOptions}
+                />
+                <Input
+                  inputMode="numeric"
+                  value={editLimit}
+                  onChange={(e) => setEditLimit(e.target.value.replace(/[^\d]/g, ''))}
+                  placeholder={t('settings.cardLimit')}
+                />
+                <Button variant="secondary" className="w-full" onClick={saveEdit}>
+                  {t('save')}
+                </Button>
+              </div>
             ) : (
-              <p className="flex-1 text-sm font-medium">{card.name}</p>
-            )}
-            {editingId === card.id ? (
-              <Button variant="secondary" className="!min-h-[36px] !px-3" onClick={saveEdit}>
-                {t('save')}
-              </Button>
-            ) : (
-              <>
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{card.name}</p>
+                  <p className="text-[10px] text-muted">
+                    {bankName(card.bankId) ?? t('settings.noBank')}
+                    {card.limit ? ` · lim ${card.limit.toLocaleString('uz-UZ')}` : ''}
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     setEditingId(card.id)
                     setEditName(card.name)
+                    setEditBankId(card.bankId ?? '')
+                    setEditLimit(card.limit != null ? String(card.limit) : '')
                   }}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:text-primary-light"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:text-primary-light"
                 >
                   <Pencil size={14} />
                 </button>
@@ -75,26 +110,34 @@ export function CreditCardSettings() {
                   onClick={() => {
                     if (confirm(t('confirmDelete'))) deleteCreditCard(card.id)
                   }}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:text-expense"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:text-expense"
                 >
                   <Trash2 size={14} />
                 </button>
-              </>
+              </div>
             )}
           </div>
         ))}
       </div>
 
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder={t('settings.cardName')}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          />
-        </div>
-        <Button onClick={handleAdd}>
+      <div className="space-y-2 border-t border-border pt-3">
+        <Input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder={t('settings.cardName')}
+        />
+        <Select
+          value={newBankId}
+          onChange={(e) => setNewBankId(e.target.value)}
+          options={bankOptions}
+        />
+        <Input
+          inputMode="numeric"
+          value={newLimit}
+          onChange={(e) => setNewLimit(e.target.value.replace(/[^\d]/g, ''))}
+          placeholder={t('settings.cardLimit')}
+        />
+        <Button className="w-full" onClick={handleAdd}>
           <Plus size={16} />
           {t('add')}
         </Button>

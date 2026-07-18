@@ -11,6 +11,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useUiStore } from '../../store/uiStore'
 import { getDebtHistory } from '../../utils/debtSync'
 import { getCategoryLabel } from '../../utils/categoryHelpers'
+import { formatCreditLabel, getCreditDueInfo } from '../../utils/creditSchedule'
 
 interface Props {
   debt: Debt
@@ -22,31 +23,49 @@ export function DebtCard({ debt }: Props) {
   const deleteDebt = useDebtStore((s) => s.deleteDebt)
   const openEdit = useUiStore((s) => s.openEditDebt)
   const transactions = useTransactionStore((s) => s.transactions)
+  const banks = useSettingsStore((s) => s.banks)
   const overrides = useSettingsStore((s) => s.categoryOverrides)
   const custom = useSettingsStore((s) => s.customCategories)
   const [expanded, setExpanded] = useState(false)
 
   const history = useMemo(
-    () => getDebtHistory(transactions, debt.name),
-    [transactions, debt.name],
+    () => getDebtHistory(transactions, debt.name, debt.id),
+    [transactions, debt.name, debt.id],
   )
+
+  const bankName = banks.find((b) => b.id === debt.bankId)?.name
+  const due =
+    debt.type === 'credit' && !debt.isPaid
+      ? getCreditDueInfo(debt, transactions)
+      : null
 
   const typeColor =
     debt.type === 'credit' ? '#F59E0B' : debt.type === 'lend' ? '#22C55E' : '#EF4444'
+
+  const title =
+    debt.type === 'credit'
+      ? formatCreditLabel(debt, bankName)
+      : debt.name
 
   return (
     <div
       className={`rounded-xl border border-border bg-surface p-4 ${debt.isPaid ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 flex items-center gap-2">
-            <h3 className="font-semibold">{debt.name}</h3>
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">{title}</h3>
             <Badge color={typeColor}>{debt.isPaid ? t('paid') : t('active')}</Badge>
           </div>
           {debt.note && <p className="text-sm text-muted">{debt.note}</p>}
+          {debt.type === 'credit' && debt.monthsTotal != null && (
+            <p className="mt-1 text-xs text-muted">
+              {t('monthsTotal')}: {debt.monthsTotal}
+              {due ? ` · ${t('monthsElapsed')}: ${due.monthsElapsed}` : ''}
+            </p>
+          )}
         </div>
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <p className="font-mono text-lg font-bold text-gold">
             {formatCurrency(debt.remainingAmount)}
           </p>
@@ -55,11 +74,29 @@ export function DebtCard({ debt }: Props) {
           </p>
         </div>
       </div>
+
       {debt.type === 'credit' && debt.monthlyPayment != null && (
-        <p className="mt-2 text-sm text-muted">
-          {t('monthlyPayment')}:{' '}
-          <span className="font-mono text-slate-100">{formatCurrency(debt.monthlyPayment)}</span>
-        </p>
+        <div className="mt-2 space-y-1 text-sm text-muted">
+          <p>
+            {t('monthlyPayment')}:{' '}
+            <span className="font-mono text-slate-100">
+              {formatCurrency(debt.monthlyPayment)}
+            </span>
+          </p>
+          {due && due.dueThisMonth > 0 && (
+            <p className="text-amber-300">
+              {t('dueThisMonth')}:{' '}
+              <span className="font-mono font-semibold">
+                {formatCurrency(due.dueThisMonth)}
+              </span>
+              {due.overdue > 0 && (
+                <span className="ml-1 text-xs text-expense">
+                  ({t('overdue')}: {formatCurrency(due.overdue)})
+                </span>
+              )}
+            </p>
+          )}
+        </div>
       )}
 
       {history.length > 0 && (
@@ -67,7 +104,7 @@ export function DebtCard({ debt }: Props) {
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="flex w-full items-center justify-between text-sm text-muted hover:text-slate-100"
+            className="flex min-h-[44px] w-full items-center justify-between text-sm text-muted hover:text-slate-100"
           >
             <span>
               {t('debtHistory')} ({history.length})
@@ -77,29 +114,29 @@ export function DebtCard({ debt }: Props) {
           {expanded && (
             <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto">
               {history.map((tx) => (
-                  <li
-                    key={tx.id}
-                    className="flex items-start justify-between gap-2 rounded-lg bg-surface2 px-2.5 py-2 text-xs"
+                <li
+                  key={tx.id}
+                  className="flex items-start justify-between gap-2 rounded-lg bg-surface2 px-2.5 py-2 text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-100">
+                      {getCategoryLabel(tx.category, t, overrides, custom)}
+                    </p>
+                    <p className="text-muted">
+                      {dayjs(tx.date).format('DD.MM.YYYY')}
+                      {tx.description ? ` · ${tx.description}` : ''}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 font-mono font-semibold ${
+                      tx.type === 'income' ? 'text-income' : 'text-expense'
+                    }`}
                   >
-                    <div className="min-w-0">
-                      <p className="font-medium text-slate-100">
-                        {getCategoryLabel(tx.category, t, overrides, custom)}
-                      </p>
-                      <p className="text-muted">
-                        {dayjs(tx.date).format('DD.MM.YYYY')}
-                        {tx.description ? ` · ${tx.description}` : ''}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 font-mono font-semibold ${
-                        tx.type === 'income' ? 'text-income' : 'text-expense'
-                      }`}
-                    >
-                      {tx.type === 'income' ? '+' : '-'}
-                      {formatCurrency(tx.amount)}
-                    </span>
-                  </li>
-                ))}
+                    {tx.type === 'income' ? '+' : '-'}
+                    {formatCurrency(tx.amount)}
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
         </div>
@@ -110,30 +147,32 @@ export function DebtCard({ debt }: Props) {
           <button
             type="button"
             onClick={() => markPaid(debt.id)}
-            className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg bg-income/15 text-sm text-income"
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-1 rounded-lg bg-income/15 text-sm text-income"
           >
             <CheckCircle2 size={14} />
             {t('markPaid')}
           </button>
         )}
-        {debt.source !== 'auto' && (
+        {(debt.source !== 'auto' || debt.type === 'credit') && (
           <>
             <button
               type="button"
               onClick={() => openEdit(debt.id)}
-              className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface2 text-muted hover:text-primary-light"
+              className="flex h-11 w-11 items-center justify-center rounded-lg bg-surface2 text-muted hover:text-primary-light"
             >
               <Pencil size={14} />
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm(t('confirmDelete'))) deleteDebt(debt.id)
-              }}
-              className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface2 text-muted hover:text-expense"
-            >
-              <Trash2 size={14} />
-            </button>
+            {debt.source !== 'auto' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(t('confirmDelete'))) deleteDebt(debt.id)
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-lg bg-surface2 text-muted hover:text-expense"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </>
         )}
       </div>
