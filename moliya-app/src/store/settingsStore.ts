@@ -47,6 +47,10 @@ const defaults: Settings = {
   customCategories: [],
   categoryOverrides: [],
   savingsBalance: 0,
+  rolloverStrategy: 'rollover',
+  budgetStartDay: 1,
+  ageOfMoneyTarget: 30,
+  hiddenAccountIds: [],
 }
 
 function upsertOverride(

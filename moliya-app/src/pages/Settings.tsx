@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Download, Upload, FileSpreadsheet, Trash2, Cloud, LogOut } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { Select } from '../components/ui/Select'
 import { CategorySettings } from '../components/settings/CategorySettings'
 import { CreditCardSettings } from '../components/settings/CreditCardSettings'
 import { BankSettings } from '../components/settings/BankSettings'
@@ -205,6 +206,33 @@ export function Settings() {
             {t('save')}
           </Button>
         </div>
+      </section>
+
+      <section className="space-y-3 rounded-xl bg-surface p-4">
+        <h2 className="text-sm font-semibold">{t('settings.budget')}</h2>
+        <Select
+          label={t('settings.rollover')}
+          value={settings.rolloverStrategy ?? 'rollover'}
+          onChange={(e) =>
+            settings.setSettings({
+              rolloverStrategy: e.target.value as 'rollover' | 'zero_out',
+            })
+          }
+          options={[
+            { value: 'rollover', label: t('settings.rolloverOn') },
+            { value: 'zero_out', label: t('settings.rolloverOff') },
+          ]}
+        />
+        <Input
+          label={t('settings.ageTarget')}
+          inputMode="numeric"
+          value={String(settings.ageOfMoneyTarget ?? 30)}
+          onChange={(e) =>
+            settings.setSettings({
+              ageOfMoneyTarget: Math.max(1, Number(e.target.value.replace(/[^\d]/g, '')) || 30),
+            })
+          }
+        />
       </section>
 
       <BankSettings />

@@ -89,6 +89,14 @@ export interface Settings {
   customCategories: CustomCategory[]
   categoryOverrides: CategoryOverride[]
   savingsBalance: number
+  /** YNAB: rollover leftover envelopes or zero out */
+  rolloverStrategy?: 'rollover' | 'zero_out'
+  /** Budget month start day 1–28 */
+  budgetStartDay?: number
+  /** Age of money goal in days */
+  ageOfMoneyTarget?: number
+  /** Account ids excluded from Ready to Assign */
+  hiddenAccountIds?: string[]
 }
 
 export type TransactionType = Transaction['type']

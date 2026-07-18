@@ -13,10 +13,13 @@ import { BalanceCard } from '../components/dashboard/BalanceCard'
 import { MonthSummary } from '../components/dashboard/MonthSummary'
 import { CategoryChart } from '../components/dashboard/CategoryChart'
 import { TransactionList } from '../components/transactions/TransactionList'
+import { ReadyToAssign } from '../components/budget/ReadyToAssign'
+import { PendingList } from '../components/sms/PendingList'
 import { useSettingsStore } from '../store/settingsStore'
 import { useTransactionStore } from '../store/transactionStore'
 import { useDebts, useDebtStats } from '../hooks/useDebts'
 import { useMonthStats } from '../hooks/useBalance'
+import { useBudget } from '../hooks/useBudget'
 import { sumCreditsDueThisMonth } from '../utils/creditSchedule'
 import { collectDueAlerts } from '../utils/cardDebt'
 import { formatCurrency } from '../utils/formatCurrency'
@@ -30,6 +33,7 @@ export function Dashboard() {
   const debts = useDebts()
   const stats = useDebtStats()
   const { profit } = useMonthStats()
+  const { readyToAssign, ageOfMoney, ageTarget, overspent } = useBudget()
 
   const creditsDue = useMemo(
     () =>
@@ -45,8 +49,14 @@ export function Dashboard() {
     [debts, creditCards, transactions],
   )
 
+  const agePct = Math.min(100, Math.round((ageOfMoney / ageTarget) * 100))
+
   return (
     <div className="space-y-4 md:space-y-6">
+      <ReadyToAssign amount={readyToAssign} />
+
+      <PendingList />
+
       <BalanceCard />
 
       {alerts.length > 0 && (
@@ -83,6 +93,33 @@ export function Dashboard() {
           </ul>
         </div>
       )}
+
+      {overspent.length > 0 && (
+        <div className="rounded-xl border border-expense/30 bg-expense/5 p-3 text-sm">
+          <p className="font-semibold text-expense">{t('overspent')}</p>
+          <p className="mt-1 text-xs text-muted">
+            {t('budget.overspentHint', { count: overspent.length })}
+          </p>
+          <Link to="/budget" className="mt-2 inline-block text-sm text-primary-light">
+            {t('nav.budget')} →
+          </Link>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-border bg-surface p-3">
+        <p className="text-xs text-muted">{t('age_of_money')}</p>
+        <div className="mt-1 flex items-end justify-between gap-2">
+          <p className="font-mono text-xl font-bold">
+            {t('age_of_money_days', { days: ageOfMoney })}
+          </p>
+          <p className="text-[10px] text-muted">
+            {t('age_of_money_goal', { days: ageTarget })}
+          </p>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface2">
+          <div className="h-full rounded-full bg-primary" style={{ width: `${agePct}%` }} />
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <div className="rounded-xl bg-teal-500/10 p-3">

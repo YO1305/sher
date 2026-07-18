@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Home, ArrowLeftRight, Landmark, BarChart3, Settings } from 'lucide-react'
+import { Home, Wallet, ArrowLeftRight, Landmark, Settings } from 'lucide-react'
 
 const items = [
   { to: '/', icon: Home, key: 'nav.dashboard' },
+  { to: '/budget', icon: Wallet, key: 'nav.budget' },
   { to: '/transactions', icon: ArrowLeftRight, key: 'nav.transactions' },
   { to: '/debts', icon: Landmark, key: 'nav.debts' },
-  { to: '/reports', icon: BarChart3, key: 'nav.reports' },
 ] as const
 
 export function BottomNav() {

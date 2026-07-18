@@ -40,6 +40,10 @@ function pickSettings(s: Settings): Settings {
     customCategories: s.customCategories ?? [],
     categoryOverrides: s.categoryOverrides ?? [],
     savingsBalance: s.savingsBalance ?? 0,
+    rolloverStrategy: s.rolloverStrategy ?? 'rollover',
+    budgetStartDay: s.budgetStartDay ?? 1,
+    ageOfMoneyTarget: s.ageOfMoneyTarget ?? 30,
+    hiddenAccountIds: s.hiddenAccountIds ?? [],
   }
 }
 

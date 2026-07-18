@@ -1,12 +1,23 @@
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Home, ArrowLeftRight, Landmark, BarChart3, Settings, Wallet } from 'lucide-react'
+import {
+  Home,
+  ArrowLeftRight,
+  Landmark,
+  BarChart3,
+  Settings,
+  Wallet,
+  PiggyBank,
+  CreditCard,
+} from 'lucide-react'
 import { useSettingsStore } from '../../store/settingsStore'
 
 const items = [
   { to: '/', icon: Home, key: 'nav.dashboard' },
+  { to: '/budget', icon: PiggyBank, key: 'nav.budget' },
   { to: '/transactions', icon: ArrowLeftRight, key: 'nav.transactions' },
   { to: '/debts', icon: Landmark, key: 'nav.debts' },
+  { to: '/accounts', icon: CreditCard, key: 'nav.accounts' },
   { to: '/reports', icon: BarChart3, key: 'nav.reports' },
   { to: '/settings', icon: Settings, key: 'nav.settings' },
 ] as const
