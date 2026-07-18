@@ -100,21 +100,30 @@ export function DebtList() {
         title: t('creditsBanksCards'),
         total: stats.credit,
         count: stats.creditCount,
-        items: debts.filter((d) => d.type === 'credit'),
+        items: debts.filter(
+          (d) =>
+            (d.type === 'credit' || d.type === 'card') &&
+            !d.isPaid &&
+            d.remainingAmount > 0,
+        ),
       },
       {
         key: 'lend' as const,
         title: t('lend'),
         total: stats.lend,
         count: stats.lendCount,
-        items: debts.filter((d) => d.type === 'lend'),
+        items: debts.filter(
+          (d) => d.type === 'lend' && !d.isPaid && d.remainingAmount > 0,
+        ),
       },
       {
         key: 'owe' as const,
         title: t('owe'),
         total: stats.owe,
         count: stats.oweCount,
-        items: debts.filter((d) => d.type === 'owe'),
+        items: debts.filter(
+          (d) => d.type === 'owe' && !d.isPaid && d.remainingAmount > 0,
+        ),
       },
     ],
     [debts, stats, t],

@@ -154,6 +154,13 @@ export const EXPENSE_CATEGORIES: CategoryDef[] = [
     aliases: ['Кредит тулаш', 'Кредит тўлаш', 'Погашение кредита'],
   },
   {
+    key: 'card_pay',
+    type: 'expense',
+    icon: CreditCard,
+    color: '#F97316',
+    aliases: ['Карта тулаш', 'Оплата карты', 'Karta to\'lash'],
+  },
+  {
     key: 'education',
     type: 'expense',
     icon: GraduationCap,

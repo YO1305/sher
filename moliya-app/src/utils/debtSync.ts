@@ -74,6 +74,14 @@ export function normalizeLoanCategory(category: string): string {
   ) {
     return 'credit_pay'
   }
+  if (
+    c === 'card_pay' ||
+    lower.includes('карта тўлаш') ||
+    lower.includes('оплата карты') ||
+    lower.includes('karta to')
+  ) {
+    return 'card_pay'
+  }
   return c
 }
 
@@ -164,7 +172,9 @@ export function buildDebtsFromTransactions(transactions: Transaction[]): Debt[] 
         continue
       }
       if (category === 'loan_taken' && tx.type === 'income') {
-        bump(tx.isCardLoan ? 'credit' : 'owe', name, amount, meta)
+        // Card borrows → buildCardDebts (type: card)
+        if (tx.isCardLoan) continue
+        bump('owe', name, amount, meta)
         continue
       }
       if (category === 'loan_pay' && tx.type === 'expense') {
@@ -263,14 +273,16 @@ export function getDebtHistory(
     )
 }
 
-export function isLoanRelated(tx: Pick<Transaction, 'category' | 'type'>): boolean {
+export function isLoanRelated(tx: Pick<Transaction, 'category' | 'type' | 'isCardLoan'>): boolean {
   const category = normalizeLoanCategory(tx.category)
   return (
     (category === 'loan_given' && tx.type === 'expense') ||
     (category === 'loan_return' && tx.type === 'income') ||
     (category === 'loan_taken' && tx.type === 'income') ||
     (category === 'loan_pay' && tx.type === 'expense') ||
-    (category === 'credit_pay' && tx.type === 'expense')
+    (category === 'credit_pay' && tx.type === 'expense') ||
+    (category === 'card_pay' && tx.type === 'expense') ||
+    !!tx.isCardLoan
   )
 }
 
@@ -279,11 +291,13 @@ export function summarizeDebts(debts: Debt[]) {
   const sum = (type: DebtType) =>
     active.filter((d) => d.type === type).reduce((s, d) => s + d.remainingAmount, 0)
   return {
-    credit: sum('credit'),
+    credit: sum('credit') + sum('card'),
     lend: sum('lend'),
     owe: sum('owe'),
-    creditCount: active.filter((d) => d.type === 'credit').length,
+    card: sum('card'),
+    creditCount: active.filter((d) => d.type === 'credit' || d.type === 'card').length,
     lendCount: active.filter((d) => d.type === 'lend').length,
     oweCount: active.filter((d) => d.type === 'owe').length,
+    cardCount: active.filter((d) => d.type === 'card').length,
   }
 }

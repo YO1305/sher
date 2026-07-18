@@ -24,11 +24,8 @@ interface SettingsState extends Settings {
   updateBank: (id: string, name: string) => void
   deleteBank: (id: string) => void
   // Credit cards
-  addCreditCard: (data: { name: string; bankId?: string; limit?: number }) => void
-  updateCreditCard: (
-    id: string,
-    patch: Partial<Pick<CreditCard, 'name' | 'bankId' | 'limit'>>,
-  ) => void
+  addCreditCard: (data: Omit<CreditCard, 'id'>) => void
+  updateCreditCard: (id: string, patch: Partial<Omit<CreditCard, 'id'>>) => void
   deleteCreditCard: (id: string) => void
   // Categories
   addCustomCategory: (cat: Omit<CustomCategory, 'key'> & { key?: string }) => void
@@ -65,11 +62,21 @@ function upsertOverride(
 function migrateCards(cards: CreditCard[] | undefined, banks: Bank[]): CreditCard[] {
   if (!cards || cards.length === 0) return DEFAULT_CREDIT_CARDS
   return cards.map((c) => {
-    if (c.bankId) return c
     const match = banks.find(
-      (b) => b.name.toLowerCase() === c.name.toLowerCase() || b.id === `bank-${c.id.replace('card-', '')}`,
+      (b) =>
+        b.name.toLowerCase() === c.name.toLowerCase() ||
+        b.id === `bank-${c.id.replace('card-', '')}`,
     )
-    return { ...c, bankId: match?.id }
+    const defaults = DEFAULT_CREDIT_CARDS.find((d) => d.id === c.id)
+    return {
+      billingDay: 1,
+      gracePeriodDays: 30,
+      onTimeFeePercent: 0,
+      lateInterestPercent: 3,
+      ...defaults,
+      ...c,
+      bankId: c.bankId ?? match?.id,
+    }
   })
 }
 
@@ -115,15 +122,19 @@ export const useSettingsStore = create<SettingsState>()(
             c.bankId === id ? { ...c, bankId: undefined } : c,
           ),
         })),
-      addCreditCard: ({ name, bankId, limit }) =>
+      addCreditCard: (data) =>
         set((state) => ({
           creditCards: [
             ...state.creditCards,
             {
               id: crypto.randomUUID(),
-              name: name.trim(),
-              bankId,
-              limit: limit && limit > 0 ? Math.round(limit) : undefined,
+              name: data.name.trim(),
+              bankId: data.bankId,
+              limit: data.limit && data.limit > 0 ? Math.round(data.limit) : undefined,
+              billingDay: data.billingDay,
+              gracePeriodDays: data.gracePeriodDays,
+              onTimeFeePercent: data.onTimeFeePercent,
+              lateInterestPercent: data.lateInterestPercent,
             },
           ],
         })),

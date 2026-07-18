@@ -12,6 +12,7 @@ import { useDebts } from '../../hooks/useDebts'
 import { resolveCategories } from '../../utils/categoryHelpers'
 import { formatCreditLabel, getCreditDueInfo } from '../../utils/creditSchedule'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { getCashBalance } from '../../utils/cashBalance'
 
 export function AddTransactionModal() {
   const { t } = useTranslation()
@@ -42,6 +43,7 @@ export function AddTransactionModal() {
     category?: string
     counterparty?: string
     creditId?: string
+    balance?: string
   }>({})
 
   const activeCredits = useMemo(
@@ -83,9 +85,18 @@ export function AddTransactionModal() {
   const paymentOptions = useMemo(
     () => [
       { value: 'cash', label: t('payment.cash') },
-      ...creditCards.map((c) => ({ value: c.id, label: c.name })),
+      { value: 'debit', label: t('payment.debit') },
+      ...creditCards.map((c) => ({
+        value: c.id,
+        label: `${t('payment.creditCard')}: ${c.name}`,
+      })),
     ],
     [creditCards, t],
+  )
+
+  const activeCards = useMemo(
+    () => debts.filter((d) => d.type === 'card' && d.remainingAmount > 0),
+    [debts],
   )
 
   const creditOptions = useMemo(
@@ -106,7 +117,9 @@ export function AddTransactionModal() {
   const isCardPayment =
     type === 'expense' &&
     paymentMethod !== 'cash' &&
+    paymentMethod !== 'debit' &&
     category !== 'credit_pay' &&
+    category !== 'card_pay' &&
     category !== 'savings_deposit'
   const selectedCard = creditCards.find((c) => c.id === paymentMethod)
   const selectedCredit = activeCredits.find((c) => c.id === creditId)
@@ -152,8 +165,11 @@ export function AddTransactionModal() {
     if (!amount || !Number.isFinite(num) || num <= 0) nextErrors.amount = t('validation.amount')
     if (!category) nextErrors.category = t('validation.category')
 
-    if (category === 'credit_pay' && !creditId) {
+    if (category === 'credit_pay' && !creditId && activeCredits.length > 0) {
       nextErrors.creditId = t('validation.credit')
+    }
+    if (category === 'card_pay' && !creditId && activeCards.length > 0) {
+      nextErrors.creditId = t('validation.card')
     }
 
     const loanCats = ['loan_taken', 'loan_return', 'loan_given', 'loan_pay']
@@ -163,6 +179,25 @@ export function AddTransactionModal() {
       !(type === 'expense' && paymentMethod !== 'cash' && isCardPayment)
     if (needsCounterparty && !counterparty.trim()) {
       nextErrors.counterparty = t('counterpartyRequired')
+    }
+
+    const roundedCheck = Math.round(num)
+    const isCardDual =
+      type === 'expense' &&
+      paymentMethod !== 'cash' &&
+      paymentMethod !== 'debit' &&
+      !['credit_pay', 'card_pay', 'loan_pay', 'savings_deposit'].includes(category)
+
+    if (
+      type === 'expense' &&
+      !isCardDual &&
+      Number.isFinite(roundedCheck) &&
+      roundedCheck > 0 &&
+      getCashBalance() < roundedCheck
+    ) {
+      nextErrors.balance = t('payCredit.insufficientBalance', {
+        balance: formatCurrency(getCashBalance()),
+      })
     }
 
     setErrors(nextErrors)
@@ -231,6 +266,7 @@ export function AddTransactionModal() {
           paymentMethod: selectedCard.id,
           linkedTxId: expenseId,
           isCardLoan: true,
+          cardId: selectedCard.id,
         },
         {
           id: expenseId,
@@ -242,6 +278,7 @@ export function AddTransactionModal() {
           description: description.trim() || undefined,
           paymentMethod: selectedCard.id,
           linkedTxId: loanId,
+          cardId: selectedCard.id,
         },
       ])
       close()
@@ -257,6 +294,10 @@ export function AddTransactionModal() {
       description: description.trim() || undefined,
       paymentMethod: type === 'expense' ? paymentMethod : 'cash',
       creditId: category === 'credit_pay' ? creditId || undefined : undefined,
+      cardId:
+        category === 'card_pay'
+          ? creditId || undefined
+          : undefined,
       debtId: linkedDebtId,
       transferKind,
     })
@@ -340,6 +381,7 @@ export function AddTransactionModal() {
             }`}
           />
           {errors.amount && <p className="mt-1 text-xs text-expense">{errors.amount}</p>}
+          {errors.balance && <p className="mt-1 text-xs text-expense">{errors.balance}</p>}
         </div>
 
         <Select
@@ -356,6 +398,25 @@ export function AddTransactionModal() {
             value={creditId}
             onChange={(e) => setCreditId(e.target.value)}
             options={creditOptions}
+            error={errors.creditId}
+          />
+        )}
+
+        {category === 'card_pay' && (
+          <Select
+            label={t('selectCard')}
+            value={creditId}
+            onChange={(e) => setCreditId(e.target.value)}
+            options={[
+              { value: '', label: `— ${t('selectCard')} —` },
+              ...activeCards.map((d) => ({
+                value: d.cardId ?? d.id,
+                label: `${d.name} · ${formatCurrency(d.remainingAmount)}`,
+              })),
+              ...creditCards
+                .filter((c) => !activeCards.some((d) => d.cardId === c.id))
+                .map((c) => ({ value: c.id, label: c.name })),
+            ]}
             error={errors.creditId}
           />
         )}
@@ -378,6 +439,7 @@ export function AddTransactionModal() {
 
         {type === 'expense' &&
           category !== 'credit_pay' &&
+          category !== 'card_pay' &&
           category !== 'savings_deposit' && (
             <Select
               label={t('paymentMethod')}

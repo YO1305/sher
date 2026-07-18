@@ -104,6 +104,9 @@ export const useDebtStore = create<DebtState>()(
           return
         }
 
+        // Credits use PayCreditModal — do not auto-pay full remaining here
+        if (shown.type === 'credit') return
+
         const amount = shown.remainingAmount
         const today = new Date().toISOString().slice(0, 10)
 
@@ -116,17 +119,17 @@ export const useDebtStore = create<DebtState>()(
             counterparty: shown.name,
             description: 'Qarzdorlik yopildi / Долг погашен',
           })
-        } else if (shown.type === 'credit') {
-          useTransactionStore.getState().addTransaction({
-            type: 'expense',
-            category: 'credit_pay',
-            amount,
-            date: today,
-            counterparty: shown.name,
-            creditId: shown.id,
-            description: 'Kredit yopildi / Кредит погашен',
-          })
-        } else {
+          return
+        }
+
+        // loan_pay reduces cash — block if insufficient
+        void import('../utils/cashBalance').then(({ getCashBalance }) => {
+          if (getCashBalance() < amount) {
+            alert(
+              `Недостаточно средств / Mablag' yetarli emas: ${getCashBalance()}`,
+            )
+            return
+          }
           useTransactionStore.getState().addTransaction({
             type: 'expense',
             category: 'loan_pay',
@@ -135,7 +138,7 @@ export const useDebtStore = create<DebtState>()(
             counterparty: shown.name,
             description: "Qarz to'landi / Долг погашен",
           })
-        }
+        })
       },
       setDebts: (debts) => {
         const manual = debts.filter(
