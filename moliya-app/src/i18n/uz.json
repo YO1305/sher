@@ -106,5 +106,20 @@
   "validation.name": "Nomni kiriting",
   "som": "so'm",
   "empty.hint": "Birinchi operatsiyani qo'shing",
-  "confirmDelete": "O'chirilsinmi?"
+  "confirmDelete": "O'chirilsinmi?",
+  "paymentMethod": "To'lov usuli",
+  "payment.cash": "Naqd pul",
+  "payment.cardHint": "Summa {{card}} oldidagi qarz sifatida hisoblanadi: kirim (qarz olish) + kategoriya bo'yicha chiqim",
+  "counterpartyRequired": "Kontakt shaxsni kiriting",
+  "debtHistory": "O'zaro hisob-kitoblar tarixi",
+  "settings.categories": "Kategoriyalar",
+  "settings.categoriesHint": "Daromad va xarajat kategoriyalarini qayta nomlash, qo'shish va o'chirish",
+  "settings.addCategory": "Yangi kategoriya",
+  "settings.categoryName": "Kategoriya nomi",
+  "settings.custom": "maxsus",
+  "settings.hidden": "yashirilgan",
+  "settings.restore": "Tiklash",
+  "settings.creditCards": "Kredit kartalar",
+  "settings.creditCardsHint": "Kartadan xarajat qilganda summa bank nomi bilan qarzlarga tushadi",
+  "settings.cardName": "Karta / bank nomi"
 }

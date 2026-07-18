@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Download, Upload, FileSpreadsheet, Trash2, Cloud, LogOut } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { CategorySettings } from '../components/settings/CategorySettings'
+import { CreditCardSettings } from '../components/settings/CreditCardSettings'
 import { useSettingsStore } from '../store/settingsStore'
 import { useTransactionStore } from '../store/transactionStore'
 import { useDebtStore } from '../store/debtStore'
@@ -10,6 +12,7 @@ import { useAuthStore } from '../store/authStore'
 import { isFirebaseConfigured } from '../firebase/config'
 import { exportToJson, importFromJson } from '../utils/exportImport'
 import { parseExcelFile } from '../utils/excelImport'
+import { DEFAULT_CREDIT_CARDS } from '../types'
 
 export function Settings() {
   const { t, i18n } = useTranslation()
@@ -46,6 +49,9 @@ export function Settings() {
         initialBalance: settings.initialBalance,
         currency: settings.currency,
         onboardingDone: settings.onboardingDone,
+        creditCards: settings.creditCards,
+        customCategories: settings.customCategories,
+        categoryOverrides: settings.categoryOverrides,
       },
     })
     showMsg(t('settings.exported'))
@@ -56,7 +62,14 @@ export function Settings() {
       const data = await importFromJson(file)
       setTransactions(data.transactions)
       setDebts(data.debts)
-      settings.setSettings(data.settings)
+      settings.setSettings({
+        ...data.settings,
+        creditCards: data.settings.creditCards?.length
+          ? data.settings.creditCards
+          : DEFAULT_CREDIT_CARDS,
+        customCategories: data.settings.customCategories ?? [],
+        categoryOverrides: data.settings.categoryOverrides ?? [],
+      })
       showMsg(t('settings.imported'))
     } catch {
       showMsg('Import error')
@@ -167,6 +180,9 @@ export function Settings() {
           </Button>
         </div>
       </section>
+
+      <CreditCardSettings />
+      <CategorySettings />
 
       <section className="space-y-3 rounded-xl bg-surface p-4">
         <Button variant="secondary" className="w-full" onClick={handleExport}>

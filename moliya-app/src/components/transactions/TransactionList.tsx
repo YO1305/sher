@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import { Search } from 'lucide-react'
 import { useTransactionStore } from '../../store/transactionStore'
+import { useSettingsStore } from '../../store/settingsStore'
 import { useBalance } from '../../hooks/useBalance'
-import { ALL_CATEGORIES } from '../../utils/categories'
+import { resolveCategories } from '../../utils/categoryHelpers'
 import { TransactionCard } from './TransactionCard'
 import { TransactionRow } from './TransactionRow'
 import { Select } from '../ui/Select'
@@ -17,7 +18,15 @@ interface Props {
 export function TransactionList({ limit, showFilters = true }: Props) {
   const { t } = useTranslation()
   const transactions = useTransactionStore((s) => s.transactions)
+  const overrides = useSettingsStore((s) => s.categoryOverrides)
+  const custom = useSettingsStore((s) => s.customCategories)
   const { withBalance } = useBalance()
+
+  const allCategoryOptions = useMemo(() => {
+    const income = resolveCategories('income', t, overrides, custom)
+    const expense = resolveCategories('expense', t, overrides, custom)
+    return [...income, ...expense]
+  }, [t, overrides, custom])
 
   const [type, setType] = useState<'all' | 'income' | 'expense'>('all')
   const [category, setCategory] = useState('all')
@@ -110,9 +119,9 @@ export function TransactionList({ limit, showFilters = true }: Props) {
               onChange={(e) => setCategory(e.target.value)}
               options={[
                 { value: 'all', label: t('category') },
-                ...ALL_CATEGORIES.map((c) => ({
+                ...allCategoryOptions.map((c) => ({
                   value: c.key,
-                  label: t(`category.${c.key}`),
+                  label: c.label,
                 })),
               ]}
             />

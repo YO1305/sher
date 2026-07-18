@@ -2,10 +2,11 @@ import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import { Pencil, Trash2 } from 'lucide-react'
 import type { Transaction } from '../../types'
-import { getCategory } from '../../utils/categories'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { useUiStore } from '../../store/uiStore'
 import { useTransactionStore } from '../../store/transactionStore'
+import { useSettingsStore } from '../../store/settingsStore'
+import { resolveCategory } from '../../utils/categoryHelpers'
 
 interface Props {
   transaction: Transaction
@@ -16,8 +17,11 @@ export function TransactionRow({ transaction, runningBalance }: Props) {
   const { t } = useTranslation()
   const openEdit = useUiStore((s) => s.openEditTransaction)
   const deleteTransaction = useTransactionStore((s) => s.deleteTransaction)
-  const cat = getCategory(transaction.category)
+  const overrides = useSettingsStore((s) => s.categoryOverrides)
+  const custom = useSettingsStore((s) => s.customCategories)
+  const cat = resolveCategory(transaction.category, t, overrides, custom)
   const Icon = cat?.icon
+  const label = cat?.label ?? transaction.category
 
   return (
     <tr className="border-b border-border/60 hover:bg-surface2/50">
@@ -32,7 +36,7 @@ export function TransactionRow({ transaction, runningBalance }: Props) {
           >
             {Icon && <Icon size={16} />}
           </span>
-          <span className="text-sm">{t(`category.${transaction.category}`)}</span>
+          <span className="text-sm">{label}</span>
         </div>
       </td>
       <td className="max-w-[160px] truncate px-3 py-3 text-sm">

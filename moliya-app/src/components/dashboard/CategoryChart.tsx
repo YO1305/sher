@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useMonthStats } from '../../hooks/useMonthStats'
-import { getCategory } from '../../utils/categories'
+import { useSettingsStore } from '../../store/settingsStore'
+import { getCategoryLabel, resolveCategory } from '../../utils/categoryHelpers'
 import { formatCurrency } from '../../utils/formatCurrency'
 
 interface Props {
@@ -12,18 +13,20 @@ interface Props {
 export function CategoryChart({ month }: Props) {
   const { t } = useTranslation()
   const { byCategory } = useMonthStats(month)
+  const overrides = useSettingsStore((s) => s.categoryOverrides)
+  const custom = useSettingsStore((s) => s.customCategories)
 
   const data = useMemo(
     () =>
       Object.entries(byCategory)
         .map(([key, value]) => ({
           key,
-          name: t(`category.${key}`),
+          name: getCategoryLabel(key, t, overrides, custom),
           value,
-          color: getCategory(key)?.color ?? '#64748B',
+          color: resolveCategory(key, t, overrides, custom)?.color ?? '#64748B',
         }))
         .sort((a, b) => b.value - a.value),
-    [byCategory, t],
+    [byCategory, t, overrides, custom],
   )
 
   if (data.length === 0) {

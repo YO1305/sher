@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import { Button } from '../ui/Button'
@@ -7,7 +7,8 @@ import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import { useUiStore } from '../../store/uiStore'
 import { useTransactionStore } from '../../store/transactionStore'
-import { getCategoriesByType } from '../../utils/categories'
+import { useSettingsStore } from '../../store/settingsStore'
+import { resolveCategories } from '../../utils/categoryHelpers'
 
 export function AddTransactionModal() {
   const { t } = useTranslation()
@@ -15,7 +16,11 @@ export function AddTransactionModal() {
   const editing = useUiStore((s) => s.editingTransaction)
   const close = useUiStore((s) => s.closeTransactionModal)
   const addTransaction = useTransactionStore((s) => s.addTransaction)
+  const addTransactions = useTransactionStore((s) => s.addTransactions)
   const updateTransaction = useTransactionStore((s) => s.updateTransaction)
+  const creditCards = useSettingsStore((s) => s.creditCards)
+  const customCategories = useSettingsStore((s) => s.customCategories)
+  const categoryOverrides = useSettingsStore((s) => s.categoryOverrides)
 
   const [type, setType] = useState<'income' | 'expense'>('expense')
   const [amount, setAmount] = useState('')
@@ -23,7 +28,12 @@ export function AddTransactionModal() {
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'))
   const [counterparty, setCounterparty] = useState('')
   const [description, setDescription] = useState('')
-  const [errors, setErrors] = useState<{ amount?: string; category?: string }>({})
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [errors, setErrors] = useState<{
+    amount?: string
+    category?: string
+    counterparty?: string
+  }>({})
 
   useEffect(() => {
     if (!open) return
@@ -33,18 +43,34 @@ export function AddTransactionModal() {
     setDate(editing?.date ?? dayjs().format('YYYY-MM-DD'))
     setCounterparty(editing?.counterparty ?? '')
     setDescription(editing?.description ?? '')
+    setPaymentMethod(editing?.paymentMethod ?? 'cash')
     setErrors({})
   }, [open, editing])
 
-  const categories = getCategoriesByType(type)
+  const categories = useMemo(
+    () => resolveCategories(type, t, categoryOverrides, customCategories),
+    [type, t, categoryOverrides, customCategories],
+  )
   const categoryOptions = [
     { value: '', label: `— ${t('category')} —` },
-    ...categories.map((c) => ({ value: c.key, label: t(`category.${c.key}`) })),
+    ...categories.map((c) => ({ value: c.key, label: c.label })),
   ]
+
+  const paymentOptions = useMemo(
+    () => [
+      { value: 'cash', label: t('payment.cash') },
+      ...creditCards.map((c) => ({ value: c.id, label: c.name })),
+    ],
+    [creditCards, t],
+  )
+
+  const isCardPayment = type === 'expense' && paymentMethod !== 'cash'
+  const selectedCard = creditCards.find((c) => c.id === paymentMethod)
 
   const handleTypeChange = (next: 'income' | 'expense') => {
     setType(next)
     setCategory('')
+    if (next === 'income') setPaymentMethod('cash')
   }
 
   const handleSave = () => {
@@ -52,23 +78,83 @@ export function AddTransactionModal() {
     const num = Number(amount.replace(/\s/g, ''))
     if (!amount || !Number.isFinite(num) || num <= 0) nextErrors.amount = t('validation.amount')
     if (!category) nextErrors.category = t('validation.category')
+
+    const loanCats = ['loan_taken', 'loan_return', 'loan_given', 'loan_pay', 'credit_pay']
+    const needsCounterparty =
+      loanCats.includes(category) &&
+      !(type === 'expense' && paymentMethod !== 'cash')
+    if (needsCounterparty && !counterparty.trim()) {
+      nextErrors.counterparty = t('counterpartyRequired')
+    }
+
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length) return
 
-    const payload = {
+    const rounded = Math.round(num)
+
+    if (editing) {
+      // Editing card dual-entry: keep payment method; linked pair synced in store
+      updateTransaction(editing.id, {
+        type,
+        amount: rounded,
+        category,
+        date,
+        counterparty: counterparty.trim() || undefined,
+        description: description.trim() || undefined,
+        paymentMethod: type === 'expense' ? paymentMethod : 'cash',
+      })
+      close()
+      return
+    }
+
+    // New expense paid with credit card → dual entry:
+    // 1) income loan_taken from bank  2) expense for purpose
+    if (isCardPayment && selectedCard) {
+      const loanId = crypto.randomUUID()
+      const expenseId = crypto.randomUUID()
+      const purposeNote =
+        description.trim() ||
+        categories.find((c) => c.key === category)?.label ||
+        category
+
+      addTransactions([
+        {
+          id: loanId,
+          type: 'income',
+          category: 'loan_taken',
+          amount: rounded,
+          date,
+          counterparty: selectedCard.name,
+          description: purposeNote,
+          paymentMethod: selectedCard.id,
+          linkedTxId: expenseId,
+          isCardLoan: true,
+        },
+        {
+          id: expenseId,
+          type: 'expense',
+          category,
+          amount: rounded,
+          date,
+          counterparty: counterparty.trim() || selectedCard.name,
+          description: description.trim() || undefined,
+          paymentMethod: selectedCard.id,
+          linkedTxId: loanId,
+        },
+      ])
+      close()
+      return
+    }
+
+    addTransaction({
       type,
-      amount: Math.round(num),
+      amount: rounded,
       category,
       date,
       counterparty: counterparty.trim() || undefined,
       description: description.trim() || undefined,
-    }
-
-    if (editing) {
-      updateTransaction(editing.id, payload)
-    } else {
-      addTransaction(payload)
-    }
+      paymentMethod: type === 'expense' ? paymentMethod : 'cash',
+    })
     close()
   }
 
@@ -138,6 +224,21 @@ export function AddTransactionModal() {
           error={errors.category}
         />
 
+        {type === 'expense' && (
+          <Select
+            label={t('paymentMethod')}
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+            options={paymentOptions}
+          />
+        )}
+
+        {isCardPayment && selectedCard && !editing && (
+          <p className="rounded-lg bg-gold/10 px-3 py-2 text-xs text-gold">
+            {t('payment.cardHint', { card: selectedCard.name })}
+          </p>
+        )}
+
         <Input
           label={t('date')}
           type="date"
@@ -149,7 +250,12 @@ export function AddTransactionModal() {
           label={t('counterparty')}
           value={counterparty}
           onChange={(e) => setCounterparty(e.target.value)}
-          placeholder={t('optional')}
+          placeholder={
+            ['loan_taken', 'loan_return', 'loan_given', 'loan_pay', 'credit_pay'].includes(category)
+              ? t('counterpartyRequired')
+              : t('optional')
+          }
+          error={errors.counterparty}
         />
 
         <Input

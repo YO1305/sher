@@ -2,11 +2,12 @@ import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import { Pencil, Trash2 } from 'lucide-react'
 import type { Transaction } from '../../types'
-import { getCategory } from '../../utils/categories'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { Badge } from '../ui/Badge'
 import { useUiStore } from '../../store/uiStore'
 import { useTransactionStore } from '../../store/transactionStore'
+import { useSettingsStore } from '../../store/settingsStore'
+import { resolveCategory } from '../../utils/categoryHelpers'
 
 interface Props {
   transaction: Transaction
@@ -17,8 +18,11 @@ export function TransactionCard({ transaction, runningBalance }: Props) {
   const { t } = useTranslation()
   const openEdit = useUiStore((s) => s.openEditTransaction)
   const deleteTransaction = useTransactionStore((s) => s.deleteTransaction)
-  const cat = getCategory(transaction.category)
+  const overrides = useSettingsStore((s) => s.categoryOverrides)
+  const custom = useSettingsStore((s) => s.customCategories)
+  const cat = resolveCategory(transaction.category, t, overrides, custom)
   const Icon = cat?.icon
+  const label = cat?.label ?? transaction.category
 
   return (
     <div className="group relative flex items-center gap-3 overflow-hidden rounded-xl bg-surface px-3 py-3">
@@ -32,10 +36,10 @@ export function TransactionCard({ transaction, runningBalance }: Props) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">
-              {transaction.counterparty || t(`category.${transaction.category}`)}
+              {transaction.counterparty || label}
             </p>
             <div className="mt-0.5 flex items-center gap-2">
-              <Badge color={cat?.color}>{t(`category.${transaction.category}`)}</Badge>
+              <Badge color={cat?.color}>{label}</Badge>
               <span className="text-xs text-muted">{dayjs(transaction.date).format('DD.MM')}</span>
             </div>
           </div>

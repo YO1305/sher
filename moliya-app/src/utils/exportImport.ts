@@ -29,5 +29,12 @@ export async function importFromJson(file: File): Promise<ExportPayload> {
   if (!Array.isArray(data.transactions) || !Array.isArray(data.debts) || !data.settings) {
     throw new Error('Invalid JSON format')
   }
+  // Backfill settings fields added in later versions
+  data.settings = {
+    ...data.settings,
+    creditCards: data.settings.creditCards ?? [],
+    customCategories: data.settings.customCategories ?? [],
+    categoryOverrides: data.settings.categoryOverrides ?? [],
+  }
   return data
 }

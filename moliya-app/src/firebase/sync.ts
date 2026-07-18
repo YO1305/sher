@@ -35,6 +35,9 @@ function pickSettings(s: Settings): Settings {
     initialBalance: s.initialBalance,
     currency: s.currency,
     onboardingDone: s.onboardingDone,
+    creditCards: s.creditCards ?? [],
+    customCategories: s.customCategories ?? [],
+    categoryOverrides: s.categoryOverrides ?? [],
   }
 }
 
@@ -153,7 +156,16 @@ export async function startSync(uid: string) {
       const remote = snap.data() as Settings
       syncedSettings = JSON.stringify(pickSettings(remote))
       applyingRemote = true
-      useSettingsStore.getState().setSettings(remote)
+      const merged = {
+        ...remote,
+        creditCards:
+          remote.creditCards && remote.creditCards.length > 0
+            ? remote.creditCards
+            : useSettingsStore.getState().creditCards,
+        customCategories: remote.customCategories ?? useSettingsStore.getState().customCategories,
+        categoryOverrides: remote.categoryOverrides ?? useSettingsStore.getState().categoryOverrides,
+      }
+      useSettingsStore.getState().setSettings(merged)
       applyingRemote = false
     }),
   )

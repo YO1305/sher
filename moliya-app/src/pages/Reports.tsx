@@ -21,7 +21,7 @@ import { exportToJson } from '../utils/exportImport'
 import { useTransactionStore } from '../store/transactionStore'
 import { useDebtStore } from '../store/debtStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { ALL_CATEGORIES } from '../utils/categories'
+import { getAllResolvableKeys, getCategoryLabel } from '../utils/categoryHelpers'
 
 export function Reports() {
   const { t } = useTranslation()
@@ -30,6 +30,8 @@ export function Reports() {
   const allTx = useTransactionStore((s) => s.transactions)
   const debts = useDebtStore((s) => s.debts)
   const settings = useSettingsStore()
+  const overrides = settings.categoryOverrides
+  const custom = settings.customCategories
 
   const barData = useMemo(() => {
     const days = new Map<string, { day: string; income: number; expense: number }>()
@@ -44,13 +46,20 @@ export function Reports() {
   }, [transactions])
 
   const categoryRows = useMemo(() => {
-    return ALL_CATEGORIES.map((cat) => {
-      const sum = transactions
-        .filter((tx) => tx.category === cat.key)
-        .reduce((s, tx) => s + tx.amount, 0)
-      return { key: cat.key, type: cat.type, sum }
-    }).filter((r) => r.sum > 0)
-  }, [transactions])
+    return getAllResolvableKeys(overrides, custom)
+      .map((cat) => {
+        const sum = transactions
+          .filter((tx) => tx.category === cat.key)
+          .reduce((s, tx) => s + tx.amount, 0)
+        return {
+          key: cat.key,
+          type: cat.type,
+          sum,
+          label: getCategoryLabel(cat.key, t, overrides, custom),
+        }
+      })
+      .filter((r) => r.sum > 0)
+  }, [transactions, overrides, custom, t])
 
   const shiftMonth = (dir: -1 | 1) => {
     setMonth(dayjs(month + '-01').add(dir, 'month').format('YYYY-MM'))
@@ -73,6 +82,9 @@ export function Reports() {
                 initialBalance: settings.initialBalance,
                 currency: settings.currency,
                 onboardingDone: settings.onboardingDone,
+                creditCards: settings.creditCards,
+                customCategories: settings.customCategories,
+                categoryOverrides: settings.categoryOverrides,
               },
             })
           }
@@ -177,7 +189,7 @@ export function Reports() {
           ) : (
             categoryRows.map((row) => (
               <div key={row.key} className="flex items-center justify-between px-4 py-3">
-                <span className="text-sm">{t(`category.${row.key}`)}</span>
+                <span className="text-sm">{row.label}</span>
                 <span
                   className={`font-mono text-sm font-bold ${
                     row.type === 'income' ? 'text-income' : 'text-expense'

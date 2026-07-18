@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Debt } from '../types'
+import type { Debt, Transaction } from '../types'
+import { applyTxToDebts } from '../utils/debtSync'
 
 interface DebtState {
   debts: Debt[]
@@ -10,6 +11,7 @@ interface DebtState {
   markPaid: (id: string) => void
   setDebts: (debts: Debt[]) => void
   clearDebts: () => void
+  applyTransactionEffect: (tx: Transaction, mode: 'apply' | 'revert') => void
 }
 
 export const useDebtStore = create<DebtState>()(
@@ -36,6 +38,10 @@ export const useDebtStore = create<DebtState>()(
         })),
       setDebts: (debts) => set({ debts }),
       clearDebts: () => set({ debts: [] }),
+      applyTransactionEffect: (tx, mode) =>
+        set((state) => ({
+          debts: applyTxToDebts(state.debts, tx, mode),
+        })),
     }),
     { name: 'moliya_debts' },
   ),

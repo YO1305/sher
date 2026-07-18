@@ -106,5 +106,20 @@
   "validation.name": "Введите имя",
   "som": "сум",
   "empty.hint": "Добавьте первую операцию",
-  "confirmDelete": "Удалить?"
+  "confirmDelete": "Удалить?",
+  "paymentMethod": "Способ оплаты",
+  "payment.cash": "Наличные",
+  "payment.cardHint": "Сумма будет учтена как долг перед {{card}}: приход (взятие в долг) + расход по категории",
+  "counterpartyRequired": "Укажите контактное лицо",
+  "debtHistory": "История взаиморасчётов",
+  "settings.categories": "Категории",
+  "settings.categoriesHint": "Переименовывайте, добавляйте и удаляйте категории доходов и расходов",
+  "settings.addCategory": "Новая категория",
+  "settings.categoryName": "Название категории",
+  "settings.custom": "своя",
+  "settings.hidden": "скрыта",
+  "settings.restore": "Восстановить",
+  "settings.creditCards": "Кредитные карты",
+  "settings.creditCardsHint": "При трате с карты сумма попадает в долги на имя банка",
+  "settings.cardName": "Название карты / банка"
 }
