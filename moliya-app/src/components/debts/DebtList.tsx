@@ -7,7 +7,7 @@ import { useTransactionStore } from '../../store/transactionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useUiStore } from '../../store/uiStore'
 import { useDebts, useDebtStats } from '../../hooks/useDebts'
-import { isLoanRelated } from '../../utils/debtSync'
+import { isLoanRelated, isDebtOperationLinked } from '../../utils/debtSync'
 import { sumCreditsDueThisMonth } from '../../utils/creditSchedule'
 import { DebtCard } from './DebtCard'
 import { CreditCalculator, type CreditCalculatorApply } from './CreditCalculator'
@@ -42,7 +42,7 @@ export function DebtList() {
     [transactions],
   )
   const loanWithoutContact = useMemo(
-    () => loanTxs.filter((tx) => !tx.counterparty?.trim()).length,
+    () => loanTxs.filter((tx) => !isDebtOperationLinked(tx)).length,
     [loanTxs],
   )
 

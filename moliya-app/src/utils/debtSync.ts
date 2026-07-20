@@ -286,6 +286,21 @@ export function isLoanRelated(tx: Pick<Transaction, 'category' | 'type' | 'isCar
   )
 }
 
+/** Loan-related tx is linked to a debt via contact or explicit id fields. */
+export function isDebtOperationLinked(
+  tx: Pick<
+    Transaction,
+    'counterparty' | 'debtId' | 'creditId' | 'cardId' | 'isCardLoan' | 'paymentMethod'
+  >,
+): boolean {
+  if (tx.counterparty?.trim()) return true
+  if (tx.debtId) return true
+  if (tx.creditId) return true
+  if (tx.cardId) return true
+  if (tx.isCardLoan && (tx.cardId || tx.paymentMethod)) return true
+  return false
+}
+
 export function summarizeDebts(debts: Debt[]) {
   const active = (debts ?? []).filter((d) => !d.isPaid && d.remainingAmount > 0)
   const sum = (type: DebtType) =>

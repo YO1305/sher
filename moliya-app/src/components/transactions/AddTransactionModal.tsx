@@ -68,7 +68,7 @@ export function AddTransactionModal() {
     setCounterparty(editing?.counterparty ?? '')
     setDescription(editing?.description ?? '')
     setPaymentMethod(editing?.paymentMethod ?? 'cash')
-    setCreditId(editing?.creditId ?? '')
+    setCreditId(editing?.creditId ?? editing?.cardId ?? '')
     setDebtId(editing?.debtId ?? '')
     setErrors({})
   }, [open, editing])
@@ -123,6 +123,8 @@ export function AddTransactionModal() {
     category !== 'savings_deposit'
   const selectedCard = creditCards.find((c) => c.id === paymentMethod)
   const selectedCredit = activeCredits.find((c) => c.id === creditId)
+  const selectedCardDebt = activeCards.find((d) => (d.cardId ?? d.id) === creditId)
+  const selectedPayCard = creditCards.find((c) => c.id === creditId)
 
   const handleTypeChange = (next: 'income' | 'expense') => {
     setType(next)
@@ -141,6 +143,12 @@ export function AddTransactionModal() {
       const pay = getCreditPaySuggestion(activeCredits[0], transactions)
       if (!amount) setAmount(String(pay || activeCredits[0].monthlyPayment || ''))
     }
+    if (key === 'card_pay' && activeCards.length === 1) {
+      const card = activeCards[0]
+      setCreditId(card.cardId ?? card.id)
+      if (!amount) setAmount(String(card.remainingAmount))
+      setCounterparty(card.name)
+    }
     if (key === 'savings_deposit' || key === 'savings_withdraw') {
       setPaymentMethod('cash')
     }
@@ -158,6 +166,16 @@ export function AddTransactionModal() {
           banks.find((b) => b.id === selectedCredit.bankId)?.name,
         ),
       )
+    }
+  }, [creditId, category]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (category === 'card_pay' && creditId && !editing) {
+      const name = selectedCardDebt?.name ?? selectedPayCard?.name
+      if (name) setCounterparty(name)
+      if (selectedCardDebt && selectedCardDebt.remainingAmount > 0) {
+        setAmount(String(selectedCardDebt.remainingAmount))
+      }
     }
   }, [creditId, category]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -223,6 +241,9 @@ export function AddTransactionModal() {
         banks.find((b) => b.id === selectedCredit.bankId)?.name,
       )
     }
+    if (category === 'card_pay' && creditId) {
+      cp = selectedCardDebt?.name ?? selectedPayCard?.name ?? cp
+    }
 
     const transferKind =
       category === 'savings_deposit'
@@ -241,6 +262,7 @@ export function AddTransactionModal() {
         description: description.trim() || undefined,
         paymentMethod: type === 'expense' ? paymentMethod : 'cash',
         creditId: category === 'credit_pay' ? creditId || undefined : undefined,
+        cardId: category === 'card_pay' ? creditId || undefined : undefined,
         debtId: linkedDebtId,
         transferKind,
       })
@@ -464,7 +486,7 @@ export function AddTransactionModal() {
           onChange={(e) => setDate(e.target.value)}
         />
 
-        {category !== 'credit_pay' && (
+        {category !== 'credit_pay' && category !== 'card_pay' && (
           <Input
             label={t('counterparty')}
             value={counterparty}
